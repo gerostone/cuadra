@@ -1,6 +1,12 @@
 // Funciones puras de presentación y filtros. Sin DOM ni Leaflet: las usa app.js y las prueba test/ui.test.mjs.
 export const RADIUS = 500; // m: lo que cuenta como "cerca tuyo"
 export const NEAR = 45;    // m: distancia del aviso "estás pasando"
+// Con avisos reales el radio se agranda hasta encontrar al menos MIN_NEAR avisos.
+export const STEPS = [500, 1000, 2000, 5000];
+export const MIN_NEAR = 5;
+export const pickRadius = (distances, steps = STEPS, min = MIN_NEAR) => steps.find(r => distances.filter(d => d <= r).length >= min) ?? steps.at(-1);
+export const radiusLabel = m => m < 1000 ? `${Math.round(m / 100)} cuadras` : `${String(m / 1000).replace('.', ',')} km`;
+export const zoomForRadius = m => ({ 500: 17, 1000: 16, 2000: 15, 5000: 14 })[m] ?? 14;
 
 const nf = new Intl.NumberFormat('es-AR');
 

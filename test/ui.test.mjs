@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   fmtM, walkMin, esc, shortPrice, priceAmount, priceSuffix, fullPrice, expLabel, perM2,
   listingSummary, signLabel, passes, activeFilterCount, DEFAULT_FILTERS, normalizeCaps,
-  presentFacts, featureList, sourceLabel
+  presentFacts, featureList, sourceLabel, pickRadius, radiusLabel, zoomForRadius, STEPS
 } from '../public/ui.js';
 
 const venta = { id: 'v1', op: 'venta', type: 'Departamento', amb: 2, m2: 48, m2tot: 52, price: 130000, currency: 'USD', banos: 1, mascotas: true, credito: false };
@@ -128,4 +128,21 @@ test('origen de los avisos', () => {
   assert.equal(sourceLabel('web', 1), '1 inmobiliaria');
   assert.equal(sourceLabel('demo'), 'ejemplos');
   assert.equal(sourceLabel('pending'), 'cargando…');
+});
+
+test('el radio se agranda hasta encontrar al menos 5 avisos', () => {
+  assert.deepEqual(STEPS, [500, 1000, 2000, 5000]);
+  assert.equal(pickRadius([10, 50, 100, 200, 450, 900]), 500);
+  assert.equal(pickRadius([10, 50, 700, 900, 990]), 1000);
+  assert.equal(pickRadius([300, 1500, 1800, 1900, 1999]), 2000);
+  assert.equal(pickRadius([4000, 4100]), 5000);
+  assert.equal(pickRadius([]), 5000);
+});
+
+test('etiqueta y zoom de cada radio', () => {
+  assert.equal(radiusLabel(500), '5 cuadras');
+  assert.equal(radiusLabel(1000), '1 km');
+  assert.equal(radiusLabel(2000), '2 km');
+  assert.equal(radiusLabel(5000), '5 km');
+  assert.deepEqual(STEPS.map(zoomForRadius), [17, 16, 15, 14]);
 });

@@ -1,4 +1,4 @@
-import { RADIUS, NEAR, dist, fmtM, walkMin, esc, shortPrice, fullPrice, expLabel, perM2, passes, priceAmount, priceSuffix, listingSummary, opLabel, signLabel, activeFilterCount, sourceLabel, presentFacts, featureList, normalizeCaps } from './ui.js';
+import { RADIUS, NEAR, dist, fmtM, walkMin, esc, shortPrice, fullPrice, expLabel, perM2, passes, priceAmount, priceSuffix, listingSummary, opLabel, signLabel, activeFilterCount, sourceLabel, presentFacts, featureList, normalizeCaps, STEPS, pickRadius, radiusLabel, zoomForRadius } from './ui.js';
 import { CELL, listingsInCell, drawFacade } from './demo.js';
 
 // ---------- Utilidades ----------
@@ -8,11 +8,13 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
 
-// ---------- Fuente de avisos: /data/listings.json (lo genera el crawler), o ejemplos si está vacío ----------
+// ---------- Fuente de avisos: listings.json de la rama `data` (lo genera el crawler), o ejemplos si no hay ----------
+// Se sirve desde GitHub para que actualizar avisos no requiera un deploy en Netlify.
+const DATA_URL = 'https://raw.githubusercontent.com/gerostone/cuadra/data/listings.json';
 const remote = { mode: 'pending', listings: [], agencies: 0 };
 async function loadListings() {
   try {
-    const res = await fetch('/data/listings.json', { cache: 'no-cache' });
+    const res = await fetch(DATA_URL);
     const data = res.ok ? await res.json() : null;
     if (data?.listings?.length) Object.assign(remote, { mode: 'web', listings: data.listings, agencies: data.agencies });
     else remote.mode = 'demo';
@@ -36,7 +38,8 @@ function listingsAround(pos, radius) {
 const state = {
   pos: null, real: false, op: 'todo', amb: 0, fav: false, pets: false, cred: false,
   favs: new Set(store.get('cuadra.favs', [])), seen: new Set(store.get('cuadra.seen', [])),
-  sel: null, walking: false, walkTarget: null, follow: true, notified: new Set()
+  sel: null, walking: false, walkTarget: null, follow: true, notified: new Set(),
+  explore: false, realPos: null, radius: RADIUS
 };
 
 // ---------- Mapa ----------
@@ -52,6 +55,7 @@ const trail = L.polyline([], { color: '#e0342b', weight: 4, opacity: .55, dashAr
 const layer = L.layerGroup().addTo(map);
 const markers = new Map();
 map.on('dragstart', () => { state.follow = false; });
+map.on('moveend', () => { if (state.pos) renderMarkers(); });
 map.on('click', e => { if (state.walking) { state.walkTarget = e.latlng; info('Caminando hacia ese punto…', 2500); } });
 
 // ---------- Ubicación ----------
@@ -69,13 +73,18 @@ function setPos(lat, lng, acc, real) {
 function startGeo() {
   if (!('geolocation' in navigator)) return fallback('Tu navegador no comparte ubicación.');
   navigator.geolocation.watchPosition(
-    g => { if (!state.walking) setPos(g.coords.latitude, g.coords.longitude, g.coords.accuracy, true); },
+    g => {
+      state.realPos = { lat: g.coords.latitude, lng: g.coords.longitude, acc: g.coords.accuracy, real: true };
+      if (!state.walking && !state.explore) setPos(g.coords.latitude, g.coords.longitude, g.coords.accuracy, true);
+    },
     () => fallback('No pudimos acceder a tu ubicación.'),
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 12000 }
   );
 }
 function fallback(msg) {
   if (state.pos) return;
+  // Sin GPS, el punto de Palermo es "tu ubicación": a ese lugar vuelve ◎ después de explorar otra zona.
+  state.realPos = { lat: -34.5889, lng: -58.4306, acc: 15, real: false };
   setPos(-34.5889, -58.4306, 15, false);
   info(`${msg} Te ubicamos en Palermo. Tocá <b>Simular caminata</b> para recorrer el barrio.`, 6000);
 }
@@ -109,15 +118,30 @@ function step() {
 // ---------- Render ----------
 let lastIds = null; // null obliga a redibujar la lista (una lista vacía también es '')
 const byId = new Map();
-function render() {
-  if (!state.pos) return;
-  const around = listingsAround(state.pos, RADIUS * 1.6).filter(o => passes(o.p, state, state.favs));
-  for (const { p } of around) byId.set(p.id, p);
-  const inRadius = around.filter(o => o.d <= RADIUS);
-  // marcadores (un poco más allá del radio para que el mapa no se vea vacío)
-  const keep = new Set(around.map(o => o.p.id));
-  for (const [id, mk] of markers) if (!keep.has(id)) { layer.removeLayer(mk); markers.delete(id); }
-  for (const { p } of around) {
+let lastAround = [];
+const MAX_PINS = 400;
+// Avisos dentro de lo que se ve del mapa, para que al recorrerlo aparezcan todos,
+// no solo los cercanos a tu ubicación.
+function viewportListings() {
+  const b = map.getBounds().pad(0.1);
+  const inView = p => b.contains([p.lat, p.lng]) && passes(p, state, state.favs);
+  if (remote.mode === 'web') return remote.listings.filter(inView);
+  if (remote.mode === 'demo' && map.getZoom() >= 15) {
+    const c = map.getCenter();
+    return listingsAround({ lat: c.lat, lng: c.lng }, c.distanceTo(b.getNorthEast())).map(o => o.p).filter(inView);
+  }
+  return [];
+}
+function renderMarkers() {
+  const set = new Map(lastAround.map(o => [o.p.id, o.p]));
+  const c = map.getCenter();
+  viewportListings()
+    .sort((x, y) => c.distanceTo([x.lat, x.lng]) - c.distanceTo([y.lat, y.lng]))
+    .slice(0, MAX_PINS)
+    .forEach(p => set.set(p.id, p));
+  for (const [id, mk] of markers) if (!set.has(id)) { layer.removeLayer(mk); markers.delete(id); }
+  for (const p of set.values()) {
+    byId.set(p.id, p);
     const cls = `pin ${p.op}${state.favs.has(p.id) ? ' fav' : ''}${state.seen.has(p.id) ? ' seen' : ''}${state.sel === p.id ? ' sel' : ''}`;
     let mk = markers.get(p.id);
     if (!mk) {
@@ -129,6 +153,23 @@ function render() {
     }
     mk.cls = cls;
   }
+}
+function render() {
+  if (!state.pos) return;
+  let radius = RADIUS, around;
+  if (remote.mode === 'web') {
+    const all = listingsAround(state.pos, STEPS.at(-1) * 1.6).filter(o => passes(o.p, state, state.favs));
+    radius = pickRadius(all.map(o => o.d));
+    around = all.filter(o => o.d <= radius * 1.6);
+  } else around = listingsAround(state.pos, RADIUS * 1.6).filter(o => passes(o.p, state, state.favs));
+  if (radius !== state.radius) {
+    state.radius = radius; radiusCircle.setRadius(radius);
+    if (state.follow) map.setView(state.pos, zoomForRadius(radius));
+  }
+  for (const { p } of around) byId.set(p.id, p);
+  const inRadius = around.filter(o => o.d <= radius);
+  lastAround = around;
+  renderMarkers();
   // avisos cercanos
   for (const { p, d } of inRadius) {
     if (d < NEAR && !state.notified.has(p.id)) {
@@ -139,23 +180,17 @@ function render() {
   }
   // estado
   renderStatus();
-  renderDock(inRadius);
+  renderDock(inRadius, radius);
 }
-function renderDock(inRadius) {
+function renderDock(inRadius, radius) {
   if (remote.mode === 'pending') { $('#countLabel').textContent = 'Cargando avisos…'; return; } // queda el esqueleto
   const n = inRadius.length;
   $('#count').textContent = n;
-  $('#countLabel').innerHTML = `cerca tuyo<br>a 5 cuadras · ${sourceLabel(remote.mode, remote.agencies)}`;
+  $('#countLabel').innerHTML = `${state.explore ? 'en esta zona' : 'cerca tuyo'}<br>a ${radiusLabel(radius)} · ${sourceLabel(remote.mode, remote.agencies)}`;
   $('#filtersApply').textContent = n === 1 ? 'Ver 1 propiedad' : `Ver ${n} propiedades`;
   const top = inRadius.slice(0, 24);
   $('#empty').hidden = top.length > 0;
-  if (!top.length) {
-    const noData = remote.mode === 'web' && !listingsAround(state.pos, RADIUS).length;
-    $('#emptyText').textContent = noData
-      ? 'Todavía no tenemos avisos de inmobiliarias en esta zona. Caminá hacia otro barrio o volvé más adelante.'
-      : 'No hay propiedades con esos filtros a 5 cuadras.';
-    $('#emptyClear').hidden = noData || (state.op === 'todo' && !activeFilterCount(state));
-  }
+  if (!top.length) renderEmpty(radius);
   const ids = top.map(o => o.p.id + (state.favs.has(o.p.id) ? '*' : '') + (state.sel === o.p.id ? '!' : '')).join(',');
   const cards = $('#cards');
   if (ids !== lastIds) {
@@ -166,6 +201,25 @@ function renderDock(inRadius) {
     // solo actualizar distancias
     top.forEach(({ d }, i) => { const el = cards.children[i]?.querySelector('[data-d]'); if (el) el.textContent = `${fmtM(d)} · ${walkMin(d)} min`; });
   }
+}
+// Sin avisos cerca: decimos dónde está el más cercano y ofrecemos ir a verlo.
+function renderEmpty(radius) {
+  $('#emptyClear').hidden = state.op === 'todo' && !activeFilterCount(state);
+  $('#emptyExplore').hidden = true;
+  if (remote.mode !== 'web') { $('#emptyText').textContent = `No hay propiedades con esos filtros a ${radiusLabel(radius)}.`; return; }
+  const nearest = remote.listings.filter(p => passes(p, state, state.favs)).map(p => ({ p, d: dist(state.pos, p) })).sort((a, b) => a.d - b.d)[0];
+  if (!nearest) { $('#emptyText').textContent = 'Ningún aviso cumple esos filtros. Probá aflojarlos.'; return; }
+  const where = nearest.p.zone || nearest.p.address;
+  $('#emptyText').innerHTML = `Todavía no tenemos avisos a menos de ${radiusLabel(STEPS.at(-1))}. El más cercano está a <b>${fmtM(nearest.d)}</b>${where ? `, en ${esc(where)}` : ''}.`;
+  $('#emptyExplore').hidden = false;
+  $('#emptyExplore').onclick = () => exploreTo(nearest.p);
+}
+// Lleva el mapa (y "tu" posición) a otra zona; el botón de ubicación vuelve a la real.
+function exploreTo(p) {
+  if (state.walking) toggleWalk();
+  state.explore = true; state.follow = true; state.notified.clear();
+  trail.setLatLngs([]);
+  setPos(p.lat, p.lng, 15, false);
 }
 function cardEl(p, d) {
   const b = document.createElement('button');
@@ -182,9 +236,9 @@ function cardEl(p, d) {
 }
 function trailLength() { const ll = trail.getLatLngs(); let s = 0; for (let i = 1; i < ll.length; i++) s += dist(ll[i - 1], ll[i]); return s; }
 function renderStatus() {
-  const live = state.real && !state.walking;
+  const live = state.real && !state.walking && !state.explore;
   $('#liveDot').hidden = !live;
-  $('#status').textContent = state.walking ? `Modo paseo · ${fmtM(trailLength())}`
+  $('#status').textContent = state.explore ? 'Explorando · ◎ para volver' : state.walking ? `Modo paseo · ${fmtM(trailLength())}`
     : live ? `En vivo · ${fmtM(trailLength())}` : 'Palermo · aproximada';
 }
 function select(id) {
@@ -442,7 +496,14 @@ function clearFilters(all) {
 }
 $('#emptyClear').onclick = () => clearFilters(true);
 $('#walkBtn').onclick = toggleWalk;
-$('#locBtn').onclick = () => { state.follow = true; if (state.pos) map.setView(state.pos, 17); };
+$('#locBtn').onclick = () => {
+  state.follow = true;
+  if (state.explore && state.realPos) {
+    state.explore = false; trail.setLatLngs([]);
+    setPos(state.realPos.lat, state.realPos.lng, state.realPos.acc, state.realPos.real);
+  } else if (state.explore) { state.explore = false; render(); }
+  if (state.pos) map.setView(state.pos, zoomForRadius(state.radius));
+};
 
 loadListings();
 startGeo();

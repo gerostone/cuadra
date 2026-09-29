@@ -102,6 +102,7 @@ body[data-dock="expanded"] .fabs, body[data-dock="hidden"] .fabs { display: none
 .tag.alquiler { background: var(--alquiler); color: var(--alquiler-ink); }
 .empty { padding: 4px 2px 12px; font-size: 14px; color: rgba(255,255,255,.8); }
 .empty p { margin: 0 0 10px; }
+.empty-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .btn-light { min-height: 44px; border: 0; border-radius: 12px; background: #fff; color: var(--ink); font-weight: 800; padding: 0 16px; }
 .dock .seg { display: flex; gap: 6px; }
 .dock .seg button { flex: 1; min-height: 44px; border: 0; border-radius: 12px; background: var(--ink-2); color: #fff; font-weight: 700; font-size: 13px; }
