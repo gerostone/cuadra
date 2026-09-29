@@ -44,6 +44,15 @@ const state = {
 
 // ---------- Mapa ----------
 const dark = matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.dataset.theme !== 'light' || document.documentElement.dataset.theme === 'dark';
+// iPhone, app instalada: iOS dibuja desde arriba de todo pero le da a la página un alto que
+// no cuenta la barra de estado, y todo lo anclado abajo queda corrido hacia arriba.
+// Medimos la diferencia y la compensamos en CSS (--ios-gap). navigator.standalone solo
+// existe en iOS: en Android y en Safari común la diferencia queda en 0.
+function fixIosGap() {
+  const gap = navigator.standalone === true ? Math.round(screen.height - innerHeight) : 0;
+  document.documentElement.style.setProperty('--ios-gap', `${gap > 0 && gap < 120 ? gap : 0}px`);
+}
+fixIosGap();
 const map = L.map('map', { zoomControl: false, attributionControl: true }).setView([-34.5889, -58.4306], 17);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19, attribution: '© OpenStreetMap', className: dark ? 'tiles-dark' : 'tiles'
@@ -67,6 +76,7 @@ const rootCss = getComputedStyle(document.documentElement);
 const dotColor = op => rootCss.getPropertyValue(op === 'venta' ? '--venta' : '--alquiler').trim() || (op === 'venta' ? '#1d4fd8' : '#e2a400');
 let lastPinKey = '';
 map.on('dragstart', () => { state.follow = false; });
+addEventListener('resize', () => { fixIosGap(); map.invalidateSize(); });
 map.on('moveend', () => { if (state.pos) renderMarkers(); });
 map.on('click', e => { if (state.walking) { state.walkTarget = e.latlng; info('Caminando hacia ese punto…', 2500); } });
 
