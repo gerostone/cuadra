@@ -82,5 +82,12 @@
     "name": "Allo Propiedades",
     "site": "https://www.allopropiedades.com.ar",
     "type": "tokko-web"
+  },
+  {
+    "id": "gomezsilvia",
+    "name": "Gomez Silvia Propiedades",
+    "site": "https://www.gomezsilviapropiedades.com.ar",
+    "type": "tokko-web",
+    "geocode": true
   }
 ]

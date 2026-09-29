@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { parseRobots, isAllowed } from './robots.mjs';
 import { politeClient, discover, Blocked } from './http.mjs';
+import { geocoder } from './geocode.mjs';
 import { extract, tokkoWebMarkers, tokkoWebCards, tokkoWebListings } from './extract.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -27,12 +28,13 @@ const ONLY = opt('only', '')?.split(',').filter(Boolean);
 const DATA = join(ROOT, opt('data', 'data'));
 const OUT = join(DATA, 'listings.json');
 const STATE = join(DATA, 'state.json');
+const GEOCACHE = join(DATA, 'geocode.json');
 const REFRESH = args.includes('--refresh'); // vuelve a leer todas las fichas, aunque estén al día
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const readJson = async (p, d) => { try { return JSON.parse(await readFile(p, 'utf8')); } catch { return d; } };
 
-async function crawlSource(src, state, now, get = politeClient()) {
+async function crawlSource(src, state, now, get = politeClient(), geocode = null) {
   const report = { id: src.id, name: src.name, discovered: 0, fetched: 0, extracted: 0, removed: 0, status: 'ok' };
   const mine = state[src.id] ??= {};
   try {
@@ -70,7 +72,15 @@ async function crawlSource(src, state, now, get = politeClient()) {
       report.fetched++;
       if (r.status === 404 || r.status === 410) { delete mine[u]; report.removed++; continue; }
       if (r.status !== 200) continue; // error temporal: se reintenta en la próxima corrida
-      const { via, listings } = extract(u, r.text, src.name);
+      const { via, listings: raw } = extract(u, r.text, src.name, { geocode: !!src.geocode });
+      // Avisos sin mapa: buscamos la dirección. Si no aparece a nivel de calle, se descartan.
+      const listings = [];
+      for (const l of raw) {
+        if (!l.needsGeocode) { listings.push(l); continue; }
+        const geo = geocode && await geocode(l.address, l.zone);
+        if (geo) { const { needsGeocode, ...rest } = l; listings.push({ ...rest, lat: geo.lat, lng: geo.lng, approx: true }); }
+        else report.sinUbicacion = (report.sinUbicacion ?? 0) + 1;
+      }
       mine[u] = { at: now, via, listings: listings.map(l => ({ ...l, agent: src.name, sourceId: src.id })) };
       if (listings.length) report.extracted++;
     }
@@ -111,7 +121,7 @@ async function discoverTokkoWeb(src, get, rules) {
 
 // Solo lo que la app necesita, para que el archivo pese poco.
 const KEEP = ['id', 'op', 'type', 'amb', 'dorm', 'm2', 'm2tot', 'price', 'currency', 'exp', 'banos', 'antig', 'lat', 'lng',
-  'address', 'zone', 'feats', 'mascotas', 'credito', 'desc', 'agent', 'phone', 'photos', 'url', 'temporario', 'sourceId'];
+  'address', 'zone', 'feats', 'mascotas', 'credito', 'desc', 'agent', 'phone', 'photos', 'url', 'temporario', 'approx', 'sourceId'];
 const slim = l => {
   const o = {};
   for (const k of KEEP) if (l[k] !== undefined && l[k] !== null && l[k] !== '' && !(Array.isArray(l[k]) && !l[k].length)) o[k] = l[k];
@@ -124,14 +134,16 @@ const slim = l => {
 async function main() {
   const sources = (await readJson(join(ROOT, 'crawler/sources.json'), [])).filter(s => !ONLY?.length || ONLY.includes(s.id));
   const state = await readJson(STATE, {});
+  const geoCache = await readJson(GEOCACHE, {});
+  const geocode = geocoder(geoCache);
   const now = Date.now();
   // Cada sitio tiene su propio ritmo, así que corren en paralelo. Los sitios con la
   // plantilla web de Tokko están alojados en los mismos servidores: van de a uno,
   // con un solo cliente más lento, para no sumar pedidos contra la misma infraestructura.
   const tokko = sources.filter(s => s.type === 'tokko-web');
   const shared = politeClient(3000);
-  const tokkoRun = (async () => { const out = []; for (const s of tokko) out.push(await crawlSource(s, state, now, shared)); return out; })();
-  const reports = [...(await Promise.all(sources.filter(s => s.type !== 'tokko-web').map(s => crawlSource(s, state, now)))), ...(await tokkoRun)];
+  const tokkoRun = (async () => { const out = []; for (const s of tokko) out.push(await crawlSource(s, state, now, shared, geocode)); return out; })();
+  const reports = [...(await Promise.all(sources.filter(s => s.type !== 'tokko-web').map(s => crawlSource(s, state, now, undefined, geocode)))), ...(await tokkoRun)];
 
   const byId = new Map();
   for (const pages of Object.values(state)) for (const p of Object.values(pages)) for (const l of p.listings ?? []) byId.set(l.id, slim(l));
@@ -139,6 +151,7 @@ async function main() {
 
   await mkdir(dirname(OUT), { recursive: true });
   await writeFile(STATE, JSON.stringify(state));
+  await writeFile(GEOCACHE, JSON.stringify(geoCache));
   await writeFile(OUT, JSON.stringify({ generatedAt: new Date(now).toISOString(), agencies: new Set(listings.map(l => l.sourceId)).size, listings }));
 
   console.table(reports);

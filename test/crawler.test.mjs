@@ -137,3 +137,27 @@ test('ficha de la plantilla web de Tokko: ubicación del mapa y datos de los ít
   assert.equal(l.lat, -34.6019755);
   assert.deepEqual(l.photos, ['https://static.tokkobroker.com/w_pics/9571354_abc.jpg']);
 });
+
+import { cleanAddress } from '../crawler/geocode.mjs';
+
+test('direcciones para geocodificar: limpia el formato de las fichas y descarta lo impreciso', () => {
+  assert.equal(cleanAddress('EL TORDO AL 1900'), 'El Tordo 1900');
+  assert.equal(cleanAddress('AYOLAS Y SAN JUSTO al 3900'), 'Ayolas 3900');
+  assert.equal(cleanAddress('MUNILLA 2288, CASTELAR, BS AS'), 'Munilla 2288');
+  assert.equal(cleanAddress('BRANDSEN al 400 - EDIFICIO TOUCHÉ'), 'Brandsen 400');
+  assert.equal(cleanAddress('BARRIO CERRADO ALTOS DEL SOL'), null);
+  assert.equal(cleanAddress('Recoleta'), null, 'sin altura no se busca');
+});
+
+test('ficha de Tokko sin mapa: solo con geocode activado devuelve el aviso para buscar la dirección', () => {
+  const html = `<html><head><title>Gomez Silvia Propiedades - Casa en Venta en Ituzaingó - EL TORDO AL 1900</title><link href="https://static.tokkobroker.com/x.css"></head>
+  <body><div class='operation-type-div operation-type-div-venta'>VENTA</div><div class='operation-val'> <span>USD95.000</span></div>
+  <div class="ficha_detalle_item"><b>Dirección</b><br/>EL TORDO AL 1900</div><div class="ficha_detalle_item"><b>Ubicación</b><br/>Ituzaingó</div></body></html>`;
+  const url = 'https://inmo.test/p/8515402-Casa-en-Venta';
+  assert.deepEqual(extract(url, html, 'Gomez').listings, []);
+  const { via, listings: [l] } = extract(url, html, 'Gomez', { geocode: true });
+  assert.equal(via, 'tokkoFicha+direccion');
+  assert.equal(l.needsGeocode, true);
+  assert.equal(l.lat, null);
+  assert.deepEqual([l.op, l.type, l.price, l.address, l.zone], ['venta', 'Casa', 95000, 'EL TORDO AL 1900', 'Ituzaingó']);
+});

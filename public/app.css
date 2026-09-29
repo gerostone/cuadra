@@ -176,6 +176,10 @@ body[data-dock="expanded"] .fabs, body[data-dock="hidden"] .fabs { display: none
 .pin.alquiler div { background: var(--alquiler); color: var(--alquiler-ink); border-color: var(--alquiler); }
 .pin.fav div { outline: 2px solid var(--me); }
 .pin.seen div { opacity: .72; }
+/* Ubicación aproximada (dirección geocodificada): cartel hueco con borde punteado. */
+.pin.approx div { background: var(--surface); border: 2px dashed; padding: 3px 5px 2px; }
+.pin.approx.venta div { color: var(--venta); border-color: var(--venta); }
+.pin.approx.alquiler div { color: var(--alquiler-ink); border-color: var(--alquiler); }
 .pin.sel div { transform: translate(-50%, -100%) scale(1.25); z-index: 5; outline: 2px solid var(--fg); }
 .me { background: none; border: 0; }
 .me div { width: 18px; height: 18px; border-radius: 50%; background: var(--me); border: 3px solid #fff; box-shadow: 0 0 0 0 rgba(224,52,43,.5); animation: pulse 2s infinite; margin: -9px 0 0 -9px; }

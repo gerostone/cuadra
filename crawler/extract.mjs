@@ -77,6 +77,13 @@ function finish(l) {
   };
 }
 
+// Aviso completo salvo la ubicación: el crawler la busca por dirección (geocode.mjs).
+function partial(l) {
+  const f = finish({ ...l, lat: -34.6, lng: -58.4 }); // coordenadas provisorias solo para validar el resto
+  if (!f) return null;
+  return { ...f, lat: null, lng: null, needsGeocode: true };
+}
+
 // ---------- 1. JSON de Tokko incrustado (webs hechas con Tokko) ----------
 // El JSON suele venir escapado dentro de un atributo o un <script>. Buscamos
 // objetos que tengan "operations" y "geo_lat" en el mismo nivel.
@@ -257,10 +264,10 @@ export function extractSinglePair(url, html, agent) {
 // ---------- 5b. Ficha de la plantilla web de Tokko (/p/ID-...) ----------
 // Título "Inmobiliaria - Departamento en Venta en Villa Crespo - Ferrari al 200",
 // ubicación en el setView del mapa y datos en los ítems "ficha_detalle_item".
-export function extractTokkoFicha(url, html, agent) {
+export function extractTokkoFicha(url, html, agent, { withoutCoords = false } = {}) {
   if (!/tokkobroker/i.test(html) || !/\/p\/\d+/.test(url)) return [];
   const c = html.match(/setView\(\[\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*\]/) || html.match(/L\.circle\(\[\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*\]/);
-  if (!c) return [];
+  if (!c && !withoutCoords) return [];
   const title = text((html.match(/<title>([\s\S]*?)<\/title>/i) || [])[1]);
   const parts = title.split(' - ').map(p => p.trim());
   const tipo = parts.find(p => /\ben\s+(venta|alquiler)/i.test(p)) || title;
@@ -271,10 +278,11 @@ export function extractTokkoFicha(url, html, agent) {
   const id = (url.match(/\/p\/(\d+)/) || [])[1];
   // Fotos de la propiedad: w_pics/<id>_... (evita logos e íconos de la plantilla).
   const photo = (html.match(new RegExp(`https://static\\.tokkobroker\\.com/(?:w_pics|pictures)/${id}_[^"'\\s)]+`)) || [])[0];
-  return [finish({
+  const done = c ? finish : partial;
+  return [done({
     id: `${new URL(url).host}_${id}`, url, agent,
     op: opClass ? guessOp(opClass) : guessOp(tipo), temporario: /temporario/i.test(tipo), type: guessType(tipo),
-    lat: num(c[1]), lng: num(c[2]),
+    lat: c ? num(c[1]) : null, lng: c ? num(c[2]) : null,
     address: items['dirección'] || parts.at(-1) || tipo, zone: items['ubicación'] || '',
     price, currency,
     amb: num(items['ambientes']), dorm: num(items['dormitorios']), banos: num(items['baños']) ?? 0,
@@ -286,10 +294,15 @@ export function extractTokkoFicha(url, html, agent) {
 
 // Probamos del más confiable al menos confiable.
 export const EXTRACTORS = { tokko: extractTokko, jsonld: extractJsonLd, houzez: extractHouzez, tokkoFicha: extractTokkoFicha, data: extractDataAttrs, single: extractSinglePair };
-export function extract(url, html, agent) {
+export function extract(url, html, agent, { geocode = false } = {}) {
   for (const [name, fn] of Object.entries(EXTRACTORS)) {
     const got = fn(url, html, agent);
     if (got.length) return { via: name, listings: got };
+  }
+  // Sitios que no publican el mapa: devolvemos el aviso para buscar su dirección.
+  if (geocode) {
+    const got = extractTokkoFicha(url, html, agent, { withoutCoords: true });
+    if (got.length) return { via: 'tokkoFicha+direccion', listings: got };
   }
   return { via: null, listings: [] };
 }

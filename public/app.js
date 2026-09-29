@@ -142,7 +142,7 @@ function renderMarkers() {
   for (const [id, mk] of markers) if (!set.has(id)) { layer.removeLayer(mk); markers.delete(id); }
   for (const p of set.values()) {
     byId.set(p.id, p);
-    const cls = `pin ${p.op}${state.favs.has(p.id) ? ' fav' : ''}${state.seen.has(p.id) ? ' seen' : ''}${state.sel === p.id ? ' sel' : ''}`;
+    const cls = `pin ${p.op}${p.approx ? ' approx' : ''}${state.favs.has(p.id) ? ' fav' : ''}${state.seen.has(p.id) ? ' seen' : ''}${state.sel === p.id ? ' sel' : ''}`;
     let mk = markers.get(p.id);
     if (!mk) {
       mk = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: cls, html: `<div>${shortPrice(p)}</div>`, iconSize: [0, 0] }), keyboard: true, title: `${p.type} en ${p.op}, ${p.address}` });
@@ -172,7 +172,8 @@ function render() {
   renderMarkers();
   // avisos cercanos
   for (const { p, d } of inRadius) {
-    if (d < NEAR && !state.notified.has(p.id)) {
+    // Con ubicación aproximada no avisamos "estás pasando": el pin puede estar a una cuadra.
+    if (d < NEAR && !p.approx && !state.notified.has(p.id)) {
       state.notified.add(p.id);
       state.seen.add(p.id); store.set('cuadra.seen', [...state.seen]);
       passingAlert(p, d);
@@ -378,7 +379,8 @@ function openSheet(p) {
         <div><p class="det-price">${esc(priceAmount(p))}<small>${priceSuffix(p)}</small></p>
           <p class="det-sub">${expLabel(p, ' de expensas')}${m2 ? ` · ${m2}` : ''}${p.days != null ? ` · publicado hace ${p.days} ${p.days === 1 ? 'día' : 'días'}` : ''}</p></div>
         <div><p class="det-where">${esc(p.address)}${p.piso ? ', ' + esc(p.piso) : ''}</p>
-          <p class="det-sub">${esc(p.type)}${p.zone ? ' en ' + esc(p.zone) : ''} · a ${fmtM(d)}, ${walkMin(d)} min caminando</p></div>
+          <p class="det-sub">${esc(p.type)}${p.zone ? ' en ' + esc(p.zone) : ''} · a ${fmtM(d)}, ${walkMin(d)} min caminando</p>
+          ${p.approx ? '<p class="det-sub">Ubicación aproximada: la inmobiliaria no publica el mapa y la ubicamos por la dirección.</p>' : ''}</div>
         ${facts.length ? `<div class="facts">${facts.map(f => `<div><b>${esc(f.value)}</b>${esc(f.label)}</div>`).join('')}</div>` : ''}
         ${feats.length ? `<div class="feats">${feats.map(f => `<span>${esc(f)}</span>`).join('')}</div>` : ''}
         ${p.desc ? `<div><p class="desc">${esc(normalizeCaps(p.desc))}</p><button type="button" class="more" hidden>Leer más</button></div>` : ''}
@@ -388,7 +390,7 @@ function openSheet(p) {
     <div class="actbar">
       <button type="button" class="btn ghost save" id="favBtn" aria-pressed="${fav}" aria-label="Guardar">${fav ? '♥' : '♡'}</button>
       ${p.url ? `<a class="btn ghost" target="_blank" rel="noopener" href="${esc(p.url)}">Ver aviso</a>` : ''}
-      <a class="btn main" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${p.lat.toFixed(6)},${p.lng.toFixed(6)}">Cómo llegar</a>
+      <a class="btn main" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${p.approx ? encodeURIComponent(`${p.address}, ${p.zone}`) : `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`}">Cómo llegar</a>
     </div>`;
   openDialog(sh, { soft: true });
   requestAnimationFrame(() => {
