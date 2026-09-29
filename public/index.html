@@ -387,10 +387,12 @@ function drawFacade(cv, p) {
 
 // ---------- Estado ----------
 const RADIUS = 500, NEAR = 45;
+// Con avisos reales el radio se agranda hasta encontrar al menos MIN_NEAR avisos.
+const STEPS = [500, 1000, 2000, 5000], MIN_NEAR = 5;
 const state = {
   pos: null, real: false, op: 'todo', amb: 0, fav: false, pets: false, cred: false,
   favs: new Set(store.get('cuadra.favs', [])), seen: new Set(store.get('cuadra.seen', [])),
-  sel: null, walking: false, walkTarget: null, follow: true, notified: new Set()
+  sel: null, walking: false, walkTarget: null, follow: true, notified: new Set(), explore: false, realPos: null, radius: RADIUS
 };
 
 // ---------- Mapa ----------
@@ -423,7 +425,10 @@ function setPos(lat, lng, acc, real) {
 function startGeo() {
   if (!('geolocation' in navigator)) return fallback('Tu navegador no comparte ubicación.');
   navigator.geolocation.watchPosition(
-    g => { if (!state.walking) setPos(g.coords.latitude, g.coords.longitude, g.coords.accuracy, true); },
+    g => {
+      state.realPos = { lat: g.coords.latitude, lng: g.coords.longitude, acc: g.coords.accuracy };
+      if (!state.walking && !state.explore) setPos(g.coords.latitude, g.coords.longitude, g.coords.accuracy, true);
+    },
     () => fallback('No pudimos acceder a tu ubicación.'),
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 12000 }
   );
@@ -473,9 +478,18 @@ let lastIds = '';
 const byId = new Map();
 function render() {
   if (!state.pos) return;
-  const around = listingsAround(state.pos, RADIUS * 1.6).filter(o => passes(o.p));
+  let radius = RADIUS, around;
+  if (remote.mode === 'web') {
+    const all = listingsAround(state.pos, STEPS.at(-1) * 1.6).filter(o => passes(o.p));
+    radius = STEPS.find(r => all.filter(o => o.d <= r).length >= MIN_NEAR) ?? STEPS.at(-1);
+    around = all.filter(o => o.d <= radius * 1.6);
+  } else around = listingsAround(state.pos, RADIUS * 1.6).filter(o => passes(o.p));
+  if (radius !== state.radius) {
+    state.radius = radius; radiusCircle.setRadius(radius);
+    if (state.follow) map.setView(state.pos, { 500: 17, 1000: 16, 2000: 15, 5000: 14 }[radius]);
+  }
   for (const { p } of around) byId.set(p.id, p);
-  const inRadius = around.filter(o => o.d <= RADIUS);
+  const inRadius = around.filter(o => o.d <= radius);
   // marcadores (un poco más allá del radio para que el mapa no se vea vacío)
   const keep = new Set(around.map(o => o.p.id));
   for (const [id, mk] of markers) if (!keep.has(id)) { layer.removeLayer(mk); markers.delete(id); }
@@ -500,20 +514,20 @@ function render() {
     }
   }
   // estado
-  $('#status').innerHTML = state.walking
+  $('#status').innerHTML = state.explore
+    ? `<b>Explorando otra zona</b> · tocá ◎ para volver a tu ubicación`
+    : state.walking
     ? `<b>Modo paseo</b> · ${fmtM(trailLength())} recorridos`
     : state.real ? `<b>Ubicación en vivo</b> · ${fmtM(trailLength())} recorridos` : `<b>Palermo, CABA</b> · ubicación aproximada`;
   $('#count').textContent = inRadius.length;
   const src = remote.mode === 'web' ? `de ${remote.agencies} ${remote.agencies === 1 ? 'inmobiliaria' : 'inmobiliarias'}` : remote.mode === 'demo' ? '· ejemplos' : '· cargando…';
-  $('#countLabel').textContent = `${inRadius.length === 1 ? 'propiedad' : 'propiedades'} a ${RADIUS} m ${src}`;
+  $('#countLabel').textContent = `${inRadius.length === 1 ? 'propiedad' : 'propiedades'} a ${fmtM(radius)} ${src}`;
   // tarjetas
   const top = inRadius.slice(0, 24);
   const ids = top.map(o => o.p.id + (state.favs.has(o.p.id) ? '*' : '') + (state.sel === o.p.id ? '!' : '')).join(',');
   const cards = $('#cards');
   $('#empty').hidden = top.length > 0;
-  $('#empty').textContent = remote.mode === 'web' && !listingsAround(state.pos, RADIUS).length
-    ? 'Todavía no tenemos avisos de inmobiliarias en esta zona. Caminá hacia otro barrio o volvé más adelante.'
-    : 'No hay propiedades con esos filtros en esta zona. Caminá unas cuadras o aflojá los filtros.';
+  if (!top.length) renderEmpty();
   if (ids !== lastIds) {
     lastIds = ids;
     cards.innerHTML = '';
@@ -536,6 +550,22 @@ function render() {
     // solo actualizar distancias
     top.forEach(({ d }, i) => { const el = cards.children[i]?.querySelector('[data-d]'); if (el) el.textContent = `${fmtM(d)} · ${walkMin(d)} min a pie`; });
   }
+}
+// Sin avisos cerca: decimos dónde está el más cercano y ofrecemos ir a verlo.
+function renderEmpty() {
+  const el = $('#empty');
+  if (remote.mode !== 'web') { el.textContent = 'No hay propiedades con esos filtros en esta zona. Caminá unas cuadras o aflojá los filtros.'; return; }
+  const nearest = remote.listings.filter(passes).map(p => ({ p, d: dist(state.pos, p) })).sort((a, b) => a.d - b.d)[0];
+  if (!nearest) { el.textContent = 'Ningún aviso cumple esos filtros. Probá aflojarlos.'; return; }
+  const where = nearest.p.zone || nearest.p.address;
+  el.innerHTML = `Todavía no tenemos avisos a menos de ${fmtM(STEPS.at(-1))}. El más cercano está a <b>${fmtM(nearest.d)}</b>${where ? `, en ${esc(where)}` : ''}.
+    <button class="chip" id="exploreBtn" style="margin-top:10px;display:block">Ver esa zona</button>`;
+  $('#exploreBtn').onclick = () => {
+    if (state.walking) toggleWalk();
+    state.explore = true; state.follow = true; state.notified.clear();
+    trail.setLatLngs([]);
+    setPos(nearest.p.lat, nearest.p.lng, 15, false);
+  };
 }
 function trailLength() { const ll = trail.getLatLngs(); let s = 0; for (let i = 1; i < ll.length; i++) s += dist(ll[i - 1], ll[i]); return s; }
 function select(id, pan) {
@@ -628,7 +658,14 @@ for (const [id, key] of [['#favChip', 'fav'], ['#petChip', 'pets'], ['#credChip'
   $(id).onclick = () => { state[key] = !state[key]; $(id).setAttribute('aria-pressed', state[key]); lastIds = ''; render(); };
 }
 $('#walkBtn').onclick = toggleWalk;
-$('#locBtn').onclick = () => { state.follow = true; if (state.pos) map.setView(state.pos, 17); };
+$('#locBtn').onclick = () => {
+  state.follow = true;
+  if (state.explore && state.realPos) {
+    state.explore = false; trail.setLatLngs([]);
+    setPos(state.realPos.lat, state.realPos.lng, state.realPos.acc, true);
+  } else if (state.explore) { state.explore = false; render(); }
+  if (state.pos) map.setView(state.pos, state.radius > 1000 ? 15 : 17);
+};
 
 loadListings();
 startGeo();
