@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cuadra</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+/* Layout: mapa a pantalla completa; barra de filtros arriba, carrusel de carteles abajo. Estética de cartel de inmobiliaria. */
+:root {
+  --bg: #eef0ee;
+  --surface: #ffffff;
+  --fg: #1b2124;
+  --muted: #5d676b;
+  --line: #d9ddda;
+  --venta: #1d4fd8;      /* cartel azul "VENDE" */
+  --alquiler: #e2a400;   /* cartel amarillo "ALQUILA" */
+  --alquiler-ink: #2a1f00;
+  --me: #e0342b;
+  --shadow: 0 6px 24px rgba(20, 30, 35, .16);
+  --display: "Barlow Condensed", "Arial Narrow", Impact, sans-serif;
+  --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111517; --surface: #1b2124; --fg: #eef1f0; --muted: #9aa5a8; --line: #2d3538;
+    --venta: #5b8bff; --alquiler: #f2bc2c; --shadow: 0 6px 24px rgba(0,0,0,.5); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111517; --surface: #1b2124; --fg: #eef1f0; --muted: #9aa5a8; --line: #2d3538;
+  --venta: #5b8bff; --alquiler: #f2bc2c; --shadow: 0 6px 24px rgba(0,0,0,.5); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--body); overflow: hidden; }
+[hidden] { display: none !important; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--venta); outline-offset: 2px; }
+
+#map { position: fixed; inset: 0; z-index: 0; background: var(--bg); }
+
+/* ---------- Barra superior ---------- */
+.top {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+  padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px 0;
+  display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+}
+.top > * { pointer-events: auto; }
+.brandrow { display: flex; align-items: center; gap: 10px; }
+.brand {
+  font: 800 26px/1 var(--display); letter-spacing: .02em; text-transform: uppercase;
+  background: var(--surface); padding: 8px 12px 6px; border-radius: 6px; box-shadow: var(--shadow);
+  display: flex; align-items: center; gap: 8px;
+}
+.brand i { width: 10px; height: 22px; background: linear-gradient(var(--venta) 50%, var(--alquiler) 50%); border-radius: 2px; }
+.status {
+  flex: 1; min-width: 0; background: var(--surface); border-radius: 6px; box-shadow: var(--shadow);
+  padding: 8px 12px; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.status b { color: var(--fg); font-weight: 600; }
+.filters { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; }
+.filters::-webkit-scrollbar { display: none; }
+.seg { display: flex; background: var(--surface); border-radius: 999px; box-shadow: var(--shadow); padding: 3px; flex: none; }
+.seg button { border: 0; background: none; padding: 7px 14px; border-radius: 999px; font-weight: 600; font-size: 13px; white-space: nowrap; }
+.seg button[aria-pressed="true"][data-op="venta"] { background: var(--venta); color: #fff; }
+.seg button[aria-pressed="true"][data-op="alquiler"] { background: var(--alquiler); color: var(--alquiler-ink); }
+.seg button[aria-pressed="true"][data-op="todo"], .seg button[aria-pressed="true"][data-amb] { background: var(--fg); color: var(--bg); }
+.chip {
+  flex: none; border: 0; background: var(--surface); box-shadow: var(--shadow); border-radius: 999px;
+  padding: 8px 14px; font-weight: 600; font-size: 13px; white-space: nowrap;
+}
+.chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+
+/* ---------- Botones flotantes ---------- */
+.fabs { position: fixed; right: 16px; z-index: 10; display: flex; flex-direction: column; gap: 10px; bottom: calc(env(safe-area-inset-bottom, 0px) + 208px); }
+.fab {
+  width: 48px; height: 48px; border-radius: 50%; border: 0; background: var(--surface); box-shadow: var(--shadow);
+  display: grid; place-items: center;
+}
+.fab svg { width: 22px; height: 22px; stroke: var(--fg); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.fab[aria-pressed="true"] { background: var(--fg); }
+.fab[aria-pressed="true"] svg { stroke: var(--bg); }
+
+/* ---------- Carrusel inferior ---------- */
+.bottom {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+  padding: 0 0 calc(env(safe-area-inset-bottom, 0px) + 14px);
+  pointer-events: none;
+}
+.bottom > * { pointer-events: auto; }
+.bar-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 0 16px 8px; }
+.count {
+  background: var(--surface); box-shadow: var(--shadow); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600;
+}
+.count span { font-variant-numeric: tabular-nums; }
+.cards { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 0 16px 4px; scrollbar-width: none; }
+.cards::-webkit-scrollbar { display: none; }
+.card {
+  flex: none; width: min(300px, 82vw); scroll-snap-align: center;
+  background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden;
+  display: grid; grid-template-columns: 92px 1fr; border: 2px solid transparent; text-align: left; padding: 0;
+}
+.card.sel { border-color: var(--fg); }
+.card .thumb { position: relative; min-height: 132px; }
+.card .thumb canvas, .card .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.card .body { padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.tag {
+  align-self: flex-start; font: 800 12px/1 var(--display); letter-spacing: .08em; text-transform: uppercase;
+  padding: 4px 6px 3px; border-radius: 3px;
+}
+.tag.venta { background: var(--venta); color: #fff; }
+.tag.alquiler { background: var(--alquiler); color: var(--alquiler-ink); }
+.price { font: 800 24px/1.05 var(--display); font-variant-numeric: tabular-nums; }
+.sub { font-size: 12px; color: var(--muted); }
+.addr { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dist { font-size: 12px; font-weight: 600; color: var(--fg); margin-top: auto; font-variant-numeric: tabular-nums; }
+.empty {
+  margin: 0 16px; background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); padding: 16px; font-size: 14px; color: var(--muted);
+}
+
+/* ---------- Ficha ---------- */
+.sheet-bg { position: fixed; inset: 0; background: rgba(10, 14, 16, .45); z-index: 30; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 31; max-height: 88%; overflow-y: auto;
+  background: var(--surface); border-radius: 16px 16px 0 0; box-shadow: var(--shadow);
+  padding: 0 0 calc(env(safe-area-inset-bottom, 0px) + 20px);
+  max-width: 560px; margin: 0 auto;
+  animation: up .28s cubic-bezier(.2,.8,.2,1);
+}
+@keyframes up { from { transform: translateY(40px); opacity: .4; } }
+.sheet .hero { position: relative; height: 200px; }
+.sheet .hero canvas, .sheet .hero img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.agent .contact { user-select: all; color: var(--fg); }
+.sheet .close {
+  position: absolute; top: 12px; right: 12px; width: 36px; height: 36px; border-radius: 50%; border: 0;
+  background: rgba(0,0,0,.55); color: #fff; font-size: 20px; line-height: 1;
+}
+.sheet .sign {
+  position: absolute; left: 16px; bottom: -18px; padding: 8px 12px 6px; border-radius: 4px;
+  font: 800 22px/1 var(--display); letter-spacing: .06em; text-transform: uppercase; box-shadow: var(--shadow);
+}
+.sheet .inner { padding: 30px 16px 0; display: flex; flex-direction: column; gap: 14px; }
+.sheet h2 { margin: 0; font: 800 36px/1 var(--display); font-variant-numeric: tabular-nums; }
+.sheet .exp { font-size: 14px; color: var(--muted); }
+.sheet .where { font-size: 16px; font-weight: 600; }
+.facts { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 10px; }
+.facts div { padding: 10px 8px; text-align: center; border-left: 1px solid var(--line); }
+.facts div:first-child { border-left: 0; }
+.facts b { display: block; font: 800 22px/1.1 var(--display); font-variant-numeric: tabular-nums; }
+.facts span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.feats { display: flex; flex-wrap: wrap; gap: 6px; }
+.feats span { border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: 13px; }
+.desc { font-size: 15px; line-height: 1.55; margin: 0; max-width: 62ch; }
+.agent { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid var(--line); padding-top: 14px; font-size: 13px; color: var(--muted); }
+.agent b { color: var(--fg); display: block; font-size: 14px; }
+.actions { display: flex; gap: 10px; }
+.btn { flex: 1; border: 0; border-radius: 10px; padding: 13px; font-weight: 700; font-size: 15px; background: var(--fg); color: var(--bg); }
+.btn.ghost { background: transparent; border: 2px solid var(--fg); color: var(--fg); }
+
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 20; top: calc(env(safe-area-inset-top, 0px) + 118px);
+  background: var(--fg); color: var(--bg); padding: 10px 14px; border-radius: 10px; box-shadow: var(--shadow);
+  font-size: 14px; width: max-content; max-width: calc(100% - 32px); border: 0; text-align: left;
+  animation: drop .3s ease;
+}
+.toast b { font-weight: 700; }
+@keyframes drop { from { transform: translate(-50%, -10px); opacity: 0; } }
+
+/* ---------- Marcadores ---------- */
+.pin { background: none; border: 0; }
+.pin div {
+  font: 800 13px/1 var(--display); letter-spacing: .02em; padding: 5px 6px 4px; border-radius: 4px; white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0,0,0,.3); position: relative; transform: translate(-50%, -100%); display: inline-block;
+  font-variant-numeric: tabular-nums; transition: transform .15s;
+}
+.pin div::after { content: ""; position: absolute; left: 50%; bottom: -5px; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top-color: inherit; }
+.pin.venta div { background: var(--venta); color: #fff; border-color: var(--venta); }
+.pin.alquiler div { background: var(--alquiler); color: var(--alquiler-ink); border-color: var(--alquiler); }
+.pin.fav div { outline: 2px solid var(--me); }
+.pin.seen div { opacity: .72; }
+.pin.sel div { transform: translate(-50%, -100%) scale(1.25); z-index: 5; outline: 2px solid var(--fg); }
+.me { background: none; border: 0; }
+.me div { width: 18px; height: 18px; border-radius: 50%; background: var(--me); border: 3px solid #fff; box-shadow: 0 0 0 0 rgba(224,52,43,.5); animation: pulse 2s infinite; margin: -9px 0 0 -9px; }
+@keyframes pulse { 70% { box-shadow: 0 0 0 16px rgba(224,52,43,0); } 100% { box-shadow: 0 0 0 0 rgba(224,52,43,0); } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+.leaflet-container { font-family: var(--body); background: var(--bg); }
+.tiles { filter: saturate(.55) contrast(.95); }
+.tiles-dark { filter: invert(1) hue-rotate(180deg) saturate(.4) brightness(.85); }
+.leaflet-control-attribution { font-size: 10px; }
+.leaflet-bottom.leaflet-right { bottom: calc(env(safe-area-inset-bottom, 0px) + 180px); }
+.leaflet-control-zoom { display: none; }
+
+@media (min-width: 900px) {
+  .bottom { left: 0; right: auto; width: 360px; top: 0; padding-top: calc(env(safe-area-inset-top, 0px) + 130px); display: flex; flex-direction: column; }
+  .cards { flex-direction: column; overflow-y: auto; overflow-x: hidden; scroll-snap-type: y proximity; padding-bottom: 16px; }
+  .card { width: 100%; }
+  .fabs { bottom: 32px; }
+  .leaflet-bottom.leaflet-right { bottom: 0; }
+  .sheet { bottom: 16px; border-radius: 16px; }
+}
+</style>
+</head>
+<body>
+<div id="map" role="application" aria-label="Mapa de propiedades"></div>
+
+<header class="top">
+  <div class="brandrow">
+    <div class="brand"><i></i>Cuadra</div>
+    <div class="status" id="status" aria-live="polite">Buscando tu ubicación…</div>
+  </div>
+  <div class="filters" role="toolbar" aria-label="Filtros">
+    <div class="seg" id="opSeg">
+      <button data-op="todo" aria-pressed="true">Todo</button>
+      <button data-op="venta" aria-pressed="false">Venta</button>
+      <button data-op="alquiler" aria-pressed="false">Alquiler</button>
+    </div>
+    <div class="seg" id="ambSeg" aria-label="Ambientes">
+      <button data-amb="0" aria-pressed="true">Amb.</button>
+      <button data-amb="1" aria-pressed="false">1</button>
+      <button data-amb="2" aria-pressed="false">2</button>
+      <button data-amb="3" aria-pressed="false">3</button>
+      <button data-amb="4" aria-pressed="false">4+</button>
+    </div>
+    <button class="chip" id="favChip" aria-pressed="false">♥ Guardadas</button>
+    <button class="chip" id="petChip" aria-pressed="false">Acepta mascotas</button>
+    <button class="chip" id="credChip" aria-pressed="false">Apto crédito</button>
+  </div>
+</header>
+
+<div class="fabs">
+  <button class="fab" id="walkBtn" aria-pressed="false" title="Simular caminata" aria-label="Simular caminata">
+    <svg viewBox="0 0 24 24"><circle cx="13" cy="4" r="2"/><path d="M9 21l2-6 3 3v3M7 12l3-4 4 1 2 4M10 8l1 7"/></svg>
+  </button>
+  <button class="fab" id="locBtn" title="Centrar en mí" aria-label="Centrar en mi ubicación">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg>
+  </button>
+</div>
+
+<section class="bottom" aria-label="Propiedades cerca tuyo">
+  <div class="bar-head"><div class="count"><span id="count">0</span> <span id="countLabel">propiedades a 500 m</span></div></div>
+  <div class="cards" id="cards"></div>
+  <div class="empty" id="empty" hidden>No hay propiedades con esos filtros en esta zona. Caminá unas cuadras o aflojá los filtros.</div>
+</section>
+
+<div id="toastWrap"></div>
+<div class="sheet-bg" id="sheetBg" hidden></div>
+<article class="sheet" id="sheet" hidden aria-modal="true" role="dialog"></article>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(() => {
+// ---------- Utilidades ----------
+const $ = s => document.querySelector(s);
+const store = {
+  get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const hash2 = (x, y) => { let h = 2166136261 ^ x; h = Math.imul(h ^ y, 16777619); h = Math.imul(h ^ (h >>> 13), 0x5bd1e995); return h ^ (h >>> 15); };
+const pick = (r, a) => a[Math.floor(r() * a.length)];
+const dist = (a, b) => { const R = 6371000, t = Math.PI / 180; const dLat = (b.lat - a.lat) * t, dLng = (b.lng - a.lng) * t;
+  const s = Math.sin(dLat/2)**2 + Math.cos(a.lat*t) * Math.cos(b.lat*t) * Math.sin(dLng/2)**2; return 2 * R * Math.asin(Math.sqrt(s)); };
+const fmtM = m => m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1).replace('.', ',')} km`;
+const walkMin = m => Math.max(1, Math.round(m / 80));
+const nf = new Intl.NumberFormat('es-AR');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const hashStr = s => { let h = 2166136261; for (const ch of String(s)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return h >>> 0; };
+const cur = p => (p.currency || (p.op === 'venta' ? 'USD' : 'ARS')) === 'USD' ? 'US$' : '$';
+const compact = n => n >= 1e6 ? (n / 1e6).toFixed(2).replace('.', ',') + 'M' : n >= 1000 ? Math.round(n / 1000) + 'k' : String(Math.round(n));
+const shortPrice = p => p.price == null ? 'Consultar' : `${cur(p)}${compact(p.price)}`;
+const fullPrice = p => p.price == null ? 'Precio a consultar'
+  : `${cur(p)} ${nf.format(p.price)}${p.op === 'alquiler' ? (p.temporario ? '/mes · temporario' : '/mes') : ''}`;
+const dash = v => v ? v : '—';
+
+// ---------- Generador de avisos (datos de ejemplo, deterministas por zona) ----------
+const CELL = 0.0012; // ~130 m
+const STREETS = ['Av. Corrientes','Gorriti','Honduras','Thames','Malabia','Armenia','Gurruchaga','Costa Rica','Nicaragua','Soler','Charcas','Guatemala','Paraguay','Av. Scalabrini Ortiz','Julián Álvarez','Serrano','Uriarte','Fitz Roy','Humboldt','Bonpland','Av. Córdoba','Cabrera','El Salvador','Jufré','Aguirre','Acevedo','Murillo','Av. Warnes','Loyola','Vera','Padilla','Castillo'];
+const TYPES = [['Departamento', .62], ['PH', .2], ['Casa', .1], ['Monoambiente', .08]];
+const FEATS = ['Balcón','Terraza propia','Patio','Luminoso','Cochera','Amenities','Parrilla','Lavadero','A estrenar','Frente','Contrafrente','Pileta','Laundry','Seguridad 24 h','Cocina integrada','Placard en dormitorios'];
+const AGENTS = ['Inmobiliaria Del Barrio','Propiedades Gorriti','Estudio Soler Bienes Raíces','Palermo Viejo Propiedades','Dueño directo','Casa Nueva Negocios Inmobiliarios'];
+const DESCS = [
+  'Muy luminoso, con vista abierta y ventilación cruzada. Pisos de madera en todos los ambientes. A dos cuadras del subte y rodeado de cafés.',
+  'Reciclado a nuevo con materiales de primera. Cocina separada con lavadero incorporado. Edificio con encargado y bajas expensas.',
+  'Planta baja al frente con patio propio. Ideal para quien busca tranquilidad sin alejarse del movimiento del barrio.',
+  'En edificio de categoría con amenities: SUM, parrilla y solárium. Balcón corrido con orientación norte.',
+  'PH en primer piso por escalera, sin expensas. Terraza propia con parrilla. Techos altos y mucha personalidad.',
+  'Frente a plaza, sobre cuadra arbolada. Dormitorios con placard, baño completo con ventilación natural.'
+];
+const cache = new Map();
+function listingsInCell(cx, cy) {
+  const key = cx + ':' + cy;
+  if (cache.has(key)) return cache.get(key);
+  const r = mulberry(hash2(cx, cy));
+  const n = r() < .62 ? 0 : r() < .85 ? 1 : 2;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const op = r() < .55 ? 'venta' : 'alquiler';
+    let x = r(), type = TYPES[0][0];
+    for (const [t, w] of TYPES) { if (x < w) { type = t; break; } x -= w; }
+    let amb = type === 'Monoambiente' ? 1 : type === 'Casa' ? 3 + Math.floor(r() * 3) : 1 + Math.floor(r() * 4);
+    if (type !== 'Monoambiente' && amb === 1) amb = 2;
+    const m2 = Math.round((amb === 1 ? 28 : amb * 22 + 10) * (0.85 + r() * .45) * (type === 'Casa' ? 1.5 : 1));
+    const m2tot = Math.round(m2 * (1 + (type === 'Departamento' ? r() * .15 : r() * .6)));
+    const price = op === 'venta'
+      ? Math.round(m2 * (1900 + r() * 1500) / 1000) * 1000
+      : Math.round(m2 * (9000 + r() * 6000) / 10000) * 10000;
+    const exp = type === 'PH' || type === 'Casa' ? 0 : Math.round((50000 + m2 * 1500 * (0.6 + r())) / 1000) * 1000;
+    const feats = [...FEATS].sort(() => r() - .5).slice(0, 3 + Math.floor(r() * 3));
+    out.push({
+      id: `${cx}_${cy}_${i}`, op, type, amb, m2, m2tot, price, exp,
+      banos: amb >= 4 ? 2 : 1, antig: r() < .15 ? 0 : Math.floor(r() * 60),
+      lat: (cy + .1 + r() * .8) * CELL, lng: (cx + .1 + r() * .8) * CELL,
+      street: pick(r, STREETS), num: 100 + Math.floor(r() * 5800),
+      piso: type === 'Departamento' || type === 'Monoambiente' ? `${1 + Math.floor(r() * 12)}° ${pick(r, ['A','B','C','D'])}` : type === 'PH' ? pick(r, ['PB','1° por escalera','Al fondo']) : '',
+      feats, mascotas: r() < .5, credito: op === 'venta' && r() < .45,
+      desc: type === 'PH' ? DESCS[4] : pick(r, DESCS.filter((_, i) => i !== 4)), agent: pick(r, AGENTS), days: 1 + Math.floor(r() * 40),
+      hue: Math.floor(r() * 360), seed: Math.floor(r() * 1e9)
+    });
+  }
+  for (const o of out) Object.assign(o, { address: `${o.street} ${o.num}`, source: 'demo', photos: [], url: null, currency: o.op === 'venta' ? 'USD' : 'ARS' });
+  cache.set(key, out);
+  return out;
+}
+
+// ---------- Fuente de avisos: Tokko vía /api/listings, o ejemplos si no hay conexión ----------
+const FETCH_R = 1500, REFETCH_AT = 600;
+const remote = { mode: 'pending', listings: [], center: null, agencies: 0, loading: false };
+async function refreshRemote() {
+  if (remote.loading || remote.mode === 'demo' || !state.pos) return;
+  if (remote.center && dist(remote.center, state.pos) < REFETCH_AT) return;
+  remote.loading = true;
+  // Redondeamos a ~100 m para que el CDN reutilice respuestas de la misma zona.
+  const q = { lat: +state.pos.lat.toFixed(3), lng: +state.pos.lng.toFixed(3) };
+  try {
+    const res = await fetch(`/api/listings?lat=${q.lat}&lng=${q.lng}&r=${FETCH_R}`);
+    const data = res.ok ? await res.json() : null;
+    if (data?.source === 'tokko') Object.assign(remote, { mode: 'tokko', listings: data.listings, center: q, agencies: data.agencies });
+    else if (data?.source === 'demo' || remote.mode === 'pending') {
+      if (!data) toast('No pudimos traer los avisos de las inmobiliarias. Te mostramos avisos de ejemplo.', 5000);
+      remote.mode = 'demo';
+    }
+  } catch {
+    if (remote.mode === 'pending') remote.mode = 'demo';
+  }
+  remote.loading = false; lastIds = ''; render();
+}
+function listingsAround(pos, radius) {
+  if (remote.mode === 'pending') return [];
+  if (remote.mode === 'tokko') return remote.listings.map(p => ({ p, d: dist(pos, p) })).filter(o => o.d <= radius).sort((a, b) => a.d - b.d);
+  const span = Math.ceil(radius / (CELL * 111320 * Math.cos(pos.lat * Math.PI / 180))) + 1;
+  const cx = Math.floor(pos.lng / CELL), cy = Math.floor(pos.lat / CELL);
+  const all = [];
+  for (let dx = -span; dx <= span; dx++) for (let dy = -span; dy <= span; dy++) all.push(...listingsInCell(cx + dx, cy + dy));
+  return all.map(p => ({ p, d: dist(pos, p) })).filter(o => o.d <= radius).sort((a, b) => a.d - b.d);
+}
+
+// ---------- Fachadas ilustradas ----------
+function drawFacade(cv, p) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = cv.clientWidth || 92, h = cv.clientHeight || 132;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const c = cv.getContext('2d'); c.scale(dpr, dpr);
+  const r = mulberry(p.seed ?? hashStr(p.id));
+  const hue = p.hue ?? hashStr(p.id + 'h') % 360;
+  c.fillStyle = `hsl(${200 + r() * 20} 60% ${78 + r() * 10}%)`; c.fillRect(0, 0, w, h);
+  const wall = `hsl(${hue} ${18 + r() * 25}% ${62 + r() * 20}%)`;
+  const top = h * (p.type === 'Casa' || p.type === 'PH' ? .32 : .08);
+  c.fillStyle = wall; c.fillRect(w * .06, top, w * .88, h - top);
+  c.fillStyle = 'rgba(0,0,0,.12)'; c.fillRect(w * .06, top, w * .88, 4);
+  const cols = w > 150 ? 5 : 3, rows = Math.max(2, Math.floor((h - top) / 34));
+  const cw = w * .88 / cols;
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+    const wx = w * .06 + x * cw + cw * .2, wy = top + 12 + y * ((h - top - 24) / rows);
+    const ww = cw * .6, wh = Math.min(22, (h - top) / rows - 10);
+    c.fillStyle = r() < .3 ? '#f6dd8a' : `hsl(210 25% ${22 + r() * 18}%)`; c.fillRect(wx, wy, ww, wh);
+    if (r() < .35) { c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(wx - 3, wy + wh, ww + 6, 3); }
+  }
+  // árbol de vereda
+  c.fillStyle = `hsl(${100 + r() * 30} 35% ${32 + r() * 10}%)`;
+  c.beginPath(); c.arc(w * (r() < .5 ? .15 : .85), h * .72, w * .2, 0, 7); c.fill();
+  c.fillStyle = '#9aa0a3'; c.fillRect(0, h - 8, w, 8);
+  // cartel
+  c.fillStyle = p.op === 'venta' ? '#1d4fd8' : '#e2a400';
+  c.fillRect(w * .5 - 18, top + (h - top) * .45, 36, 18);
+  c.fillStyle = p.op === 'venta' ? '#fff' : '#2a1f00'; c.font = '800 9px Barlow Condensed, sans-serif'; c.textAlign = 'center';
+  c.fillText(p.op === 'venta' ? 'VENDE' : 'ALQUILA', w * .5, top + (h - top) * .45 + 12.5);
+}
+
+// ---------- Estado ----------
+const RADIUS = 500, NEAR = 45;
+const state = {
+  pos: null, real: false, op: 'todo', amb: 0, fav: false, pets: false, cred: false,
+  favs: new Set(store.get('cuadra.favs', [])), seen: new Set(store.get('cuadra.seen', [])),
+  sel: null, walking: false, walkTarget: null, follow: true, notified: new Set()
+};
+
+// ---------- Mapa ----------
+const dark = matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.dataset.theme !== 'light' || document.documentElement.dataset.theme === 'dark';
+const map = L.map('map', { zoomControl: false, attributionControl: true }).setView([-34.5889, -58.4306], 17);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution: '© OpenStreetMap', className: dark ? 'tiles-dark' : 'tiles'
+}).addTo(map);
+const meMarker = L.marker([0, 0], { icon: L.divIcon({ className: 'me', html: '<div></div>', iconSize: [0, 0] }), interactive: false, zIndexOffset: 1000 });
+const accCircle = L.circle([0, 0], { radius: 20, color: '#e0342b', weight: 1, fillOpacity: .08, interactive: false });
+const radiusCircle = L.circle([0, 0], { radius: RADIUS, color: '#1b2124', weight: 1, dashArray: '4 6', fill: false, opacity: .35, interactive: false });
+const trail = L.polyline([], { color: '#e0342b', weight: 4, opacity: .55, dashArray: '1 8', lineCap: 'round' }).addTo(map);
+const layer = L.layerGroup().addTo(map);
+const markers = new Map();
+map.on('dragstart', () => { state.follow = false; });
+map.on('click', e => { if (state.walking) { state.walkTarget = e.latlng; toast('Caminando hacia ese punto…'); } });
+
+// ---------- Ubicación ----------
+function setPos(lat, lng, acc, real) {
+  const first = !state.pos;
+  const prev = state.pos;
+  state.pos = { lat, lng }; state.real = real;
+  meMarker.setLatLng(state.pos).addTo(map);
+  accCircle.setLatLng(state.pos).setRadius(acc || 15).addTo(map);
+  radiusCircle.setLatLng(state.pos).addTo(map);
+  if (!prev || dist(prev, state.pos) > 3) trail.addLatLng(state.pos);
+  if (first) map.setView(state.pos, 17); else if (state.follow) map.panTo(state.pos, { animate: true, duration: .5 });
+  render();
+  refreshRemote();
+}
+function startGeo() {
+  if (!('geolocation' in navigator)) return fallback('Tu navegador no comparte ubicación.');
+  navigator.geolocation.watchPosition(
+    g => { if (!state.walking) setPos(g.coords.latitude, g.coords.longitude, g.coords.accuracy, true); },
+    () => fallback('No pudimos acceder a tu ubicación.'),
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 12000 }
+  );
+}
+function fallback(msg) {
+  if (state.pos) return;
+  setPos(-34.5889, -58.4306, 15, false);
+  toast(`${msg} Te ubicamos en Palermo. Tocá <b>Simular caminata</b> para recorrer el barrio.`, 6000);
+}
+
+// ---------- Simulación de caminata ----------
+let walkTimer = null, heading = Math.random() * Math.PI * 2;
+function toggleWalk() {
+  state.walking = !state.walking;
+  $('#walkBtn').setAttribute('aria-pressed', state.walking);
+  if (state.walking) {
+    state.follow = true;
+    toast('Modo paseo: caminás solo por el barrio. Tocá el mapa para elegir hacia dónde.');
+    walkTimer = setInterval(step, 400);
+  } else { clearInterval(walkTimer); state.walkTarget = null; }
+}
+function step() {
+  if (!state.pos) return;
+  const m = 1.4 * 0.4 * 6; // 6x velocidad de caminata
+  if (state.walkTarget) {
+    const d = dist(state.pos, state.walkTarget);
+    if (d < m) { state.walkTarget = null; }
+    else heading = Math.atan2(state.walkTarget.lat - state.pos.lat, (state.walkTarget.lng - state.pos.lng) * Math.cos(state.pos.lat * Math.PI / 180));
+  } else if (Math.random() < .06) {
+    heading += (Math.random() < .5 ? 1 : -1) * Math.PI / 2; // doblar en la esquina
+  }
+  const dLat = Math.sin(heading) * m / 111320;
+  const dLng = Math.cos(heading) * m / (111320 * Math.cos(state.pos.lat * Math.PI / 180));
+  setPos(state.pos.lat + dLat, state.pos.lng + dLng, 8, false);
+}
+
+// ---------- Render ----------
+function passes(p) {
+  if (state.op !== 'todo' && p.op !== state.op) return false;
+  if (state.amb && (state.amb === 4 ? p.amb < 4 : p.amb !== state.amb)) return false;
+  if (state.fav && !state.favs.has(p.id)) return false;
+  if (state.pets && !p.mascotas) return false;
+  if (state.cred && !p.credito) return false;
+  return true;
+}
+let lastIds = '';
+const byId = new Map();
+function render() {
+  if (!state.pos) return;
+  const around = listingsAround(state.pos, RADIUS * 1.6).filter(o => passes(o.p));
+  for (const { p } of around) byId.set(p.id, p);
+  const inRadius = around.filter(o => o.d <= RADIUS);
+  // marcadores (un poco más allá del radio para que el mapa no se vea vacío)
+  const keep = new Set(around.map(o => o.p.id));
+  for (const [id, mk] of markers) if (!keep.has(id)) { layer.removeLayer(mk); markers.delete(id); }
+  for (const { p } of around) {
+    const cls = `pin ${p.op}${state.favs.has(p.id) ? ' fav' : ''}${state.seen.has(p.id) ? ' seen' : ''}${state.sel === p.id ? ' sel' : ''}`;
+    let mk = markers.get(p.id);
+    if (!mk) {
+      mk = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: cls, html: `<div>${shortPrice(p)}</div>`, iconSize: [0, 0] }), keyboard: true, title: `${p.type} en ${p.op}, ${p.address}` });
+      mk.on('click', () => { select(p.id, true); openSheet(p); });
+      mk.addTo(layer); markers.set(p.id, mk);
+    } else if (mk.cls !== cls) {
+      mk.setIcon(L.divIcon({ className: cls, html: `<div>${shortPrice(p)}</div>`, iconSize: [0, 0] }));
+    }
+    mk.cls = cls;
+  }
+  // avisos cercanos
+  for (const { p, d } of inRadius) {
+    if (d < NEAR && !state.notified.has(p.id)) {
+      state.notified.add(p.id);
+      state.seen.add(p.id); store.set('cuadra.seen', [...state.seen]);
+      toast(`Estás pasando por <b>${esc(p.address)}</b>: ${esc(p.type.toLowerCase())} en ${p.op} · ${fullPrice(p)}`, 5000, p);
+    }
+  }
+  // estado
+  $('#status').innerHTML = state.walking
+    ? `<b>Modo paseo</b> · ${fmtM(trailLength())} recorridos`
+    : state.real ? `<b>Ubicación en vivo</b> · ${fmtM(trailLength())} recorridos` : `<b>Palermo, CABA</b> · ubicación aproximada`;
+  $('#count').textContent = inRadius.length;
+  const src = remote.mode === 'tokko' ? `de ${remote.agencies} ${remote.agencies === 1 ? 'inmobiliaria' : 'inmobiliarias'}` : remote.mode === 'demo' ? '· ejemplos' : '· cargando…';
+  $('#countLabel').textContent = `${inRadius.length === 1 ? 'propiedad' : 'propiedades'} a ${RADIUS} m ${src}`;
+  // tarjetas
+  const top = inRadius.slice(0, 24);
+  const ids = top.map(o => o.p.id + (state.favs.has(o.p.id) ? '*' : '') + (state.sel === o.p.id ? '!' : '')).join(',');
+  const cards = $('#cards');
+  $('#empty').hidden = top.length > 0;
+  if (ids !== lastIds) {
+    lastIds = ids;
+    cards.innerHTML = '';
+    for (const { p, d } of top) {
+      const b = document.createElement('button');
+      b.className = 'card' + (state.sel === p.id ? ' sel' : ''); b.dataset.id = p.id;
+      const thumb = p.photos?.length ? `<img src="${esc(p.photos[0])}" alt="" loading="lazy">` : '<canvas></canvas>';
+      b.innerHTML = `<div class="thumb">${thumb}</div><div class="body">
+        <span class="tag ${p.op}">${p.op === 'venta' ? 'Venta' : 'Alquiler'}</span>
+        <span class="price">${fullPrice(p)}</span>
+        <span class="sub">${p.exp ? '+ $ ' + nf.format(p.exp) + ' expensas' : 'Sin expensas'}</span>
+        <span class="addr">${state.favs.has(p.id) ? '♥ ' : ''}${esc(p.address)}</span>
+        <span class="sub">${esc(p.type)}${p.amb ? ` · ${p.amb} amb.` : ''}${p.m2 ? ` · ${p.m2} m²` : ''}</span>
+        <span class="dist" data-d>${fmtM(d)} · ${walkMin(d)} min a pie</span></div>`;
+      b.onclick = () => { select(p.id, true); openSheet(p); };
+      cards.appendChild(b);
+      const cv = b.querySelector('canvas'); if (cv) drawFacade(cv, p);
+    }
+  } else {
+    // solo actualizar distancias
+    top.forEach(({ d }, i) => { const el = cards.children[i]?.querySelector('[data-d]'); if (el) el.textContent = `${fmtM(d)} · ${walkMin(d)} min a pie`; });
+  }
+}
+function trailLength() { const ll = trail.getLatLngs(); let s = 0; for (let i = 1; i < ll.length; i++) s += dist(ll[i - 1], ll[i]); return s; }
+function select(id, pan) {
+  state.sel = id; render();
+  const card = document.querySelector(`.card[data-id="${id}"]`);
+  card?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  const p = byId.get(id);
+  if (pan && p) { state.follow = false; map.panTo([p.lat, p.lng]); }
+}
+
+// ---------- Ficha ----------
+function openSheet(p) {
+  state.seen.add(p.id); store.set('cuadra.seen', [...state.seen]);
+  const d = state.pos ? dist(state.pos, p) : 0;
+  const fav = state.favs.has(p.id);
+  const sh = $('#sheet');
+  sh.dataset.id = p.id;
+  sh.innerHTML = `
+    <div class="hero">${p.photos?.length ? `<img src="${esc(p.photos[0])}" alt="Foto de ${esc(p.address)}">` : '<canvas></canvas>'}<button class="close" aria-label="Cerrar">×</button>
+      <div class="sign tag ${p.op}">${p.op === 'venta' ? 'Vende' : 'Alquila'}</div></div>
+    <div class="inner">
+      <div><h2>${fullPrice(p)}</h2>
+        <div class="exp">${p.exp ? `+ $ ${nf.format(p.exp)} de expensas` : 'Sin expensas'}${p.op === 'venta' && p.price && p.m2 ? ` · ${cur(p)} ${nf.format(Math.round(p.price / p.m2))}/m²` : ''}</div></div>
+      <div><div class="where">${esc(p.address)}${p.piso ? ', ' + esc(p.piso) : ''}</div>
+        <div class="exp">${esc(p.type)}${p.zone ? ' en ' + esc(p.zone) : ''} · a ${fmtM(d)} de vos, ${walkMin(d)} min caminando${p.days != null ? ` · publicado hace ${p.days} ${p.days === 1 ? 'día' : 'días'}` : ''}</div></div>
+      <div class="facts">
+        <div><b>${dash(p.amb)}</b><span>Amb.</span></div>
+        <div><b>${dash(p.m2)}</b><span>m² cub.</span></div>
+        <div><b>${dash(p.m2tot)}</b><span>m² tot.</span></div>
+        <div><b>${p.antig === 0 ? 'Nuevo' : dash(p.antig)}</b><span>${p.antig === 0 ? 'A estrenar' : 'Años'}</span></div>
+      </div>
+      <div class="feats">${[...new Set([...p.feats, ...(p.mascotas ? ['Acepta mascotas'] : []), ...(p.credito ? ['Apto crédito'] : [])])].map(f => `<span>${esc(f)}</span>`).join('')}${p.banos ? `<span>${p.banos} ${p.banos > 1 ? 'baños' : 'baño'}</span>` : ''}</div>
+      ${p.desc ? `<p class="desc">${esc(p.desc)}</p>` : ''}
+      <div class="agent"><div><b>${esc(p.agent)}</b>${p.source === 'demo' ? 'Aviso de ejemplo generado para esta demo'
+        : [p.phone, p.email].filter(Boolean).map(c => `<span class="contact">${esc(c)}</span>`).join(' · ')
+          + (p.alsoBy?.length ? `<br>También la publica: ${p.alsoBy.map(esc).join(', ')}` : '')}</div></div>
+      <div class="actions">
+        <button class="btn ghost" id="favBtn">${fav ? '♥ Guardada' : '♡ Guardar'}</button>
+        ${p.url ? `<a class="btn ghost" style="text-align:center;text-decoration:none" target="_blank" rel="noopener" href="${esc(p.url)}">Ver aviso</a>` : ''}
+        <a class="btn" style="text-align:center;text-decoration:none" target="_blank" rel="noopener"
+           href="https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${p.lat.toFixed(6)},${p.lng.toFixed(6)}">Cómo llegar</a>
+      </div>
+    </div>`;
+  sh.hidden = false; $('#sheetBg').hidden = false;
+  requestAnimationFrame(() => { const cv = sh.querySelector('canvas'); if (cv) drawFacade(cv, p); });
+  sh.querySelector('.close').onclick = closeSheet;
+  sh.querySelector('#favBtn').onclick = e => {
+    if (state.favs.has(p.id)) state.favs.delete(p.id); else state.favs.add(p.id);
+    store.set('cuadra.favs', [...state.favs]);
+    e.target.textContent = state.favs.has(p.id) ? '♥ Guardada' : '♡ Guardar';
+    render();
+  };
+  sh.querySelector('.close').focus();
+}
+function closeSheet() { $('#sheet').hidden = true; $('#sheetBg').hidden = true; }
+$('#sheetBg').onclick = closeSheet;
+addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+
+// Si una foto no carga, mostramos la fachada ilustrada.
+document.addEventListener('error', e => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement) || !img.closest('.thumb, .hero')) return;
+  const id = img.closest('[data-id]')?.dataset.id ?? $('#sheet').dataset.id;
+  const cv = document.createElement('canvas'); img.replaceWith(cv);
+  const p = byId.get(id); if (p) drawFacade(cv, p);
+}, true);
+
+// ---------- Toast ----------
+let toastT;
+function toast(html, ms = 3500, p) {
+  const w = $('#toastWrap'); w.innerHTML = '';
+  const t = document.createElement(p ? 'button' : 'div'); t.className = 'toast'; t.innerHTML = html;
+  if (p) t.onclick = () => { w.innerHTML = ''; select(p.id, true); openSheet(p); };
+  w.appendChild(t);
+  clearTimeout(toastT); toastT = setTimeout(() => { w.innerHTML = ''; }, ms);
+  if (p && navigator.vibrate) try { navigator.vibrate(60); } catch {}
+}
+
+// ---------- Filtros ----------
+function segment(id, attr, key, parse) {
+  $(id).addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    $(id).querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    state[key] = parse(b.dataset[attr]); lastIds = ''; render();
+  });
+}
+segment('#opSeg', 'op', 'op', v => v);
+segment('#ambSeg', 'amb', 'amb', Number);
+for (const [id, key] of [['#favChip', 'fav'], ['#petChip', 'pets'], ['#credChip', 'cred']]) {
+  $(id).onclick = () => { state[key] = !state[key]; $(id).setAttribute('aria-pressed', state[key]); lastIds = ''; render(); };
+}
+$('#walkBtn').onclick = toggleWalk;
+$('#locBtn').onclick = () => { state.follow = true; if (state.pos) map.setView(state.pos, 17); };
+
+startGeo();
+setTimeout(() => fallback('Tardamos en encontrar tu ubicación.'), 8000);
+})();
+</script>
+</body>
+</html>

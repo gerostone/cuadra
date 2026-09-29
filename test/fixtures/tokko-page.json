@@ -1,0 +1,46 @@
+{
+  "meta": { "limit": 250, "offset": 0, "total_count": 4, "next": null, "previous": null },
+  "objects": [
+    {
+      "id": 101, "publication_title": "Hermoso 3 ambientes con balcón",
+      "type": { "id": 2, "name": "Departamento" },
+      "address": "Gorriti 4800 5° B", "fake_address": "Gorriti al 4800",
+      "location": { "name": "Palermo Soho" },
+      "geo_lat": "-34.5891", "geo_long": "-58.4310",
+      "room_amount": 3, "suite_amount": 2, "bathroom_amount": 1,
+      "roofed_surface": "68.00", "total_surface": "74.00", "expenses": 185000, "age": 12,
+      "web_price": true, "created_at": "2026-09-01T10:00:00",
+      "operations": [
+        { "operation_type": "Venta", "prices": [ { "currency": "USD", "price": 189000, "period": 0 } ] },
+        { "operation_type": "Alquiler", "prices": [ { "currency": "ARS", "price": 950000, "period": 1 } ] }
+      ],
+      "photos": [
+        { "image": "https://static.tokkobroker.com/pictures/101-2.jpg", "is_front_cover": false, "order": 2 },
+        { "image": "https://static.tokkobroker.com/pictures/101-1.jpg", "is_front_cover": true, "order": 1 }
+      ],
+      "tags": [ { "name": "Balcón" }, { "name": "Apto crédito" }, { "name": "Acepta mascotas" } ],
+      "description": "<p>Luminoso&nbsp;3 ambientes</p><script>alert(1)</script>",
+      "public_url": "https://ficha.info/p/101",
+      "branch": { "name": "Soho Propiedades", "phone": "+54 11 4833-0000", "email": "info@soho.test" }
+    },
+    {
+      "id": 202, "type": { "name": "Departamento" },
+      "address": "Gorriti 4802", "geo_lat": "-34.58912", "geo_long": "-58.43102",
+      "room_amount": 3, "roofed_surface": "70", "web_price": true,
+      "operations": [ { "operation_type": "Venta", "prices": [ { "currency": "USD", "price": 190000 } ] } ],
+      "photos": [], "tags": [], "branch": { "name": "Otra Inmobiliaria" }
+    },
+    {
+      "id": 303, "type": { "name": "PH" }, "address": "Thames 1500",
+      "geo_lat": "-34.5870", "geo_long": "-58.4290", "room_amount": 4,
+      "web_price": false,
+      "operations": [ { "operation_type": "Alquiler temporario", "prices": [ { "currency": "USD", "price": 1200 } ] } ],
+      "branch": { "name": "Soho Propiedades" }
+    },
+    {
+      "id": 404, "type": { "name": "Local" }, "address": "Sin ubicación",
+      "geo_lat": "0", "geo_long": "0",
+      "operations": [ { "operation_type": "Venta", "prices": [ { "currency": "USD", "price": 99000 } ] } ]
+    }
+  ]
+}

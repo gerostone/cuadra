@@ -1,0 +1,10 @@
+{
+  "name": "cuadra",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "deploy:draft": "netlify deploy --no-build --dir \"$PWD/public\" --functions \"$PWD/netlify/functions\"",
+    "deploy": "npm test && netlify deploy --prod --no-build --dir \"$PWD/public\" --functions \"$PWD/netlify/functions\""
+  }
+}
