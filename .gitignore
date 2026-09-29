@@ -4,3 +4,4 @@ node_modules
 deno.lock
 .omc
 .claude
+.superpowers
