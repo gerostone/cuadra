@@ -48,8 +48,22 @@ const dark = matchMedia('(prefers-color-scheme: dark)').matches && document.docu
 // no cuenta la barra de estado, y todo lo anclado abajo queda corrido hacia arriba.
 // Medimos la diferencia y la compensamos en CSS (--ios-gap). navigator.standalone solo
 // existe en iOS: en Android y en Safari común la diferencia queda en 0.
+// Solo hay que compensar si la página se dibuja detrás de la barra de estado (zona segura de
+// arriba > 0). Con la barra de estado normal, iOS ya la deja arriba y el alto es el correcto.
+function safeTop() {
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;top:0;height:0;padding-top:env(safe-area-inset-top,0px);visibility:hidden';
+  document.body.appendChild(probe);
+  const v = parseFloat(getComputedStyle(probe).paddingTop) || 0;
+  probe.remove();
+  return v;
+}
 function fixIosGap() {
-  const gap = navigator.standalone === true ? Math.round(screen.height - innerHeight) : 0;
+  let gap = 0;
+  if (navigator.standalone === true) {
+    const top = safeTop();
+    if (top > 0) gap = Math.min(Math.round(screen.height - innerHeight), Math.round(top));
+  }
   document.documentElement.style.setProperty('--ios-gap', `${gap > 0 && gap < 120 ? gap : 0}px`);
 }
 fixIosGap();
