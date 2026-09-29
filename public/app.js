@@ -1,4 +1,4 @@
-import { RADIUS, NEAR, dist, fmtM, walkMin, esc, cur, shortPrice, fullPrice, expLabel, perM2, passes } from './ui.js';
+import { RADIUS, NEAR, dist, fmtM, walkMin, esc, shortPrice, fullPrice, expLabel, perM2, passes, priceAmount, priceSuffix, listingSummary, opLabel } from './ui.js';
 import { CELL, listingsInCell, drawFacade } from './demo.js';
 
 // ---------- Utilidades ----------
@@ -53,7 +53,7 @@ const trail = L.polyline([], { color: '#e0342b', weight: 4, opacity: .55, dashAr
 const layer = L.layerGroup().addTo(map);
 const markers = new Map();
 map.on('dragstart', () => { state.follow = false; });
-map.on('click', e => { if (state.walking) { state.walkTarget = e.latlng; toast('Caminando hacia ese punto…'); } });
+map.on('click', e => { if (state.walking) { state.walkTarget = e.latlng; info('Caminando hacia ese punto…', 2500); } });
 
 // ---------- Ubicación ----------
 function setPos(lat, lng, acc, real) {
@@ -78,7 +78,7 @@ function startGeo() {
 function fallback(msg) {
   if (state.pos) return;
   setPos(-34.5889, -58.4306, 15, false);
-  toast(`${msg} Te ubicamos en Palermo. Tocá <b>Simular caminata</b> para recorrer el barrio.`, 6000);
+  info(`${msg} Te ubicamos en Palermo. Tocá <b>Simular caminata</b> para recorrer el barrio.`, 6000);
 }
 
 // ---------- Simulación de caminata ----------
@@ -88,7 +88,7 @@ function toggleWalk() {
   $('#walkBtn').setAttribute('aria-pressed', state.walking);
   if (state.walking) {
     state.follow = true;
-    toast('Modo paseo: caminás solo por el barrio. Tocá el mapa para elegir hacia dónde.');
+    info('Modo paseo: caminás solo por el barrio. Tocá el mapa para elegir hacia dónde.');
     walkTimer = setInterval(step, 400);
   } else { clearInterval(walkTimer); state.walkTarget = null; }
 }
@@ -135,13 +135,11 @@ function render() {
     if (d < NEAR && !state.notified.has(p.id)) {
       state.notified.add(p.id);
       state.seen.add(p.id); store.set('cuadra.seen', [...state.seen]);
-      toast(`Estás pasando por <b>${esc(p.address)}</b>: ${esc(p.type.toLowerCase())} en ${p.op} · ${fullPrice(p)}`, 5000, p);
+      passingAlert(p, d);
     }
   }
   // estado
-  $('#status').innerHTML = state.walking
-    ? `<b>Modo paseo</b> · ${fmtM(trailLength())} recorridos`
-    : state.real ? `<b>Ubicación en vivo</b> · ${fmtM(trailLength())} recorridos` : `<b>Palermo, CABA</b> · ubicación aproximada`;
+  renderStatus();
   $('#count').textContent = inRadius.length;
   const src = remote.mode === 'web' ? `de ${remote.agencies} ${remote.agencies === 1 ? 'inmobiliaria' : 'inmobiliarias'}` : remote.mode === 'demo' ? '· ejemplos' : '· cargando…';
   $('#countLabel').textContent = `${inRadius.length === 1 ? 'propiedad' : 'propiedades'} a ${RADIUS} m ${src}`;
@@ -177,6 +175,12 @@ function render() {
   }
 }
 function trailLength() { const ll = trail.getLatLngs(); let s = 0; for (let i = 1; i < ll.length; i++) s += dist(ll[i - 1], ll[i]); return s; }
+function renderStatus() {
+  const live = state.real && !state.walking;
+  $('#liveDot').hidden = !live;
+  $('#status').textContent = state.walking ? `Modo paseo · ${fmtM(trailLength())}`
+    : live ? `En vivo · ${fmtM(trailLength())}` : 'Palermo · aproximada';
+}
 function select(id, pan) {
   state.sel = id; render();
   const card = document.querySelector(`.card[data-id="${id}"]`);
@@ -242,15 +246,39 @@ document.addEventListener('error', e => {
   const p = byId.get(id); if (p) drawFacade(cv, p);
 }, true);
 
-// ---------- Toast ----------
-let toastT;
-function toast(html, ms = 3500, p) {
-  const w = $('#toastWrap'); w.innerHTML = '';
-  const t = document.createElement(p ? 'button' : 'div'); t.className = 'toast'; t.innerHTML = html;
-  if (p) t.onclick = () => { w.innerHTML = ''; select(p.id, true); openSheet(p); };
-  w.appendChild(t);
-  clearTimeout(toastT); toastT = setTimeout(() => { w.innerHTML = ''; }, ms);
-  if (p && navigator.vibrate) try { navigator.vibrate(60); } catch {}
+// ---------- Aviso de arriba ----------
+// "Estás pasando" usa el color del cartel de la propiedad; los mensajes informativos, el oscuro del panel.
+let alertT;
+function showAlert(el, ms) {
+  $('#alertWrap').replaceChildren(el);
+  document.body.classList.add('has-alert');
+  clearTimeout(alertT); alertT = setTimeout(hideAlert, ms);
+}
+function hideAlert() {
+  clearTimeout(alertT);
+  $('#alertWrap').replaceChildren();
+  document.body.classList.remove('has-alert');
+}
+function info(html, ms = 4000) {
+  const el = document.createElement('div');
+  el.className = 'alert info'; el.innerHTML = `<p>${html}</p>`;
+  showAlert(el, ms);
+}
+function passingAlert(p, d) {
+  const el = document.createElement('button');
+  el.type = 'button'; el.className = `alert ${p.op}`;
+  el.innerHTML = `<span class="alert-body">
+      <small>Estás pasando · a ${fmtM(d)}</small>
+      <span class="alert-price">${esc(priceAmount(p))}<span>${priceSuffix(p)}</span></span>
+      <span class="alert-sub">${esc(p.address)} · ${esc(listingSummary(p))} · ${opLabel(p)}</span>
+    </span><span class="alert-go" aria-hidden="true">Ver</span>`;
+  // Deslizar hacia arriba lo descarta.
+  let y0 = null, swiped = false;
+  el.addEventListener('pointerdown', e => { y0 = e.clientY; swiped = false; });
+  el.addEventListener('pointerup', e => { if (y0 != null && e.clientY - y0 < -30) { swiped = true; hideAlert(); } y0 = null; });
+  el.onclick = () => { if (swiped) return; hideAlert(); select(p.id, true); openSheet(p); };
+  showAlert(el, 8000);
+  if (navigator.vibrate) try { navigator.vibrate(60); } catch {}
 }
 
 // ---------- Filtros ----------

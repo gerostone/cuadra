@@ -13,10 +13,7 @@
 <div id="map" role="application" aria-label="Mapa de propiedades"></div>
 
 <header class="top">
-  <div class="brandrow">
-    <div class="brand"><i></i>Cuadra</div>
-    <div class="status" id="status" aria-live="polite">Buscando tu ubicación…</div>
-  </div>
+  <div class="pill"><i class="mark" aria-hidden="true"></i><b>Cuadra</b><span class="live" id="liveDot" hidden></span><span id="status">Buscando tu ubicación…</span></div>
   <div class="filters" role="toolbar" aria-label="Filtros">
     <div class="seg" id="opSeg">
       <button data-op="todo" aria-pressed="true">Todo</button>
@@ -51,7 +48,7 @@
   <div class="empty" id="empty" hidden>No hay propiedades con esos filtros en esta zona. Caminá unas cuadras o aflojá los filtros.</div>
 </section>
 
-<div id="toastWrap"></div>
+<div id="alertWrap" aria-live="polite"></div>
 <div class="sheet-bg" id="sheetBg" hidden></div>
 <article class="sheet" id="sheet" hidden aria-modal="true" role="dialog"></article>
 
