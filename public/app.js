@@ -54,6 +54,18 @@ const radiusCircle = L.circle([0, 0], { radius: RADIUS, color: '#1b2124', weight
 const trail = L.polyline([], { color: '#e0342b', weight: 4, opacity: .55, dashArray: '1 8', lineCap: 'round' }).addTo(map);
 const layer = L.layerGroup().addTo(map);
 const markers = new Map();
+// Rendimiento en celulares: solo los avisos más cercanos al centro del mapa llevan
+// cartel de precio (elementos DOM). El resto se dibuja como puntos en un canvas,
+// que cuesta casi nada aunque sean miles.
+const MAX_DOTS = 3000;
+// Carteles según el zoom: de lejos se amontonan y no se leen, así que van menos.
+const labelsFor = z => z >= 17 ? 120 : z >= 16 ? 70 : z >= 15 ? 35 : z >= 14 ? 12 : 0;
+const dotRenderer = L.canvas({ padding: 0.3 });
+const dotLayer = L.layerGroup().addTo(map);
+const dots = new Map();
+const rootCss = getComputedStyle(document.documentElement);
+const dotColor = op => rootCss.getPropertyValue(op === 'venta' ? '--venta' : '--alquiler').trim() || (op === 'venta' ? '#1d4fd8' : '#e2a400');
+let lastPinKey = '';
 map.on('dragstart', () => { state.follow = false; });
 map.on('moveend', () => { if (state.pos) renderMarkers(); });
 map.on('click', e => { if (state.walking) { state.walkTarget = e.latlng; info('Caminando hacia ese punto…', 2500); } });
@@ -119,7 +131,6 @@ function step() {
 let lastIds = null; // null obliga a redibujar la lista (una lista vacía también es '')
 const byId = new Map();
 let lastAround = [];
-const MAX_PINS = 400;
 // Avisos dentro de lo que se ve del mapa, para que al recorrerlo aparezcan todos,
 // no solo los cercanos a tu ubicación.
 function viewportListings() {
@@ -132,17 +143,28 @@ function viewportListings() {
   }
   return [];
 }
+const pinClass = p => `pin ${p.op}${p.approx ? ' approx' : ''}${state.favs.has(p.id) ? ' fav' : ''}${state.seen.has(p.id) ? ' seen' : ''}${state.sel === p.id ? ' sel' : ''}`;
 function renderMarkers() {
-  const set = new Map(lastAround.map(o => [o.p.id, o.p]));
-  const c = map.getCenter();
-  viewportListings()
-    .sort((x, y) => c.distanceTo([x.lat, x.lng]) - c.distanceTo([y.lat, y.lng]))
-    .slice(0, MAX_PINS)
-    .forEach(p => set.set(p.id, p));
-  for (const [id, mk] of markers) if (!set.has(id)) { layer.removeLayer(mk); markers.delete(id); }
-  for (const p of set.values()) {
+  const c = map.getCenter(), k = Math.cos(c.lat * Math.PI / 180);
+  const d2 = p => { const dy = p.lat - c.lat, dx = (p.lng - c.lng) * k; return dx * dx + dy * dy; };
+  const all = new Map(lastAround.map(o => [o.p.id, o.p]));
+  for (const p of viewportListings()) all.set(p.id, p);
+  const sorted = [...all.values()].sort((x, y) => d2(x) - d2(y));
+  const nLabels = labelsFor(map.getZoom());
+  const labels = sorted.slice(0, nLabels);
+  const sel = state.sel && all.get(state.sel);
+  if (sel && !labels.includes(sel)) labels.push(sel);
+  const labeled = new Set(labels.map(p => p.id));
+  const rest = sorted.slice(nLabels, MAX_DOTS).filter(p => !labeled.has(p.id));
+  // Cada actualización del GPS pasa por acá: si no cambió nada, no tocamos el mapa.
+  const key = nLabels + '|' + labels.map(p => p.id + pinClass(p)).join() + '|' + rest.map(p => p.id).join();
+  if (key === lastPinKey) return;
+  lastPinKey = key;
+
+  for (const [id, mk] of markers) if (!labeled.has(id)) { layer.removeLayer(mk); markers.delete(id); }
+  for (const p of labels) {
     byId.set(p.id, p);
-    const cls = `pin ${p.op}${p.approx ? ' approx' : ''}${state.favs.has(p.id) ? ' fav' : ''}${state.seen.has(p.id) ? ' seen' : ''}${state.sel === p.id ? ' sel' : ''}`;
+    const cls = pinClass(p);
     let mk = markers.get(p.id);
     if (!mk) {
       mk = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: cls, html: `<div>${shortPrice(p)}</div>`, iconSize: [0, 0] }), keyboard: true, title: `${p.type} en ${p.op}, ${p.address}` });
@@ -152,6 +174,18 @@ function renderMarkers() {
       mk.setIcon(L.divIcon({ className: cls, html: `<div>${shortPrice(p)}</div>`, iconSize: [0, 0] }));
     }
     mk.cls = cls;
+  }
+  const dotted = new Set(rest.map(p => p.id));
+  for (const [id, dot] of dots) if (!dotted.has(id)) { dotLayer.removeLayer(dot); dots.delete(id); }
+  for (const p of rest) {
+    byId.set(p.id, p);
+    if (dots.has(p.id)) continue;
+    const dot = L.circleMarker([p.lat, p.lng], {
+      renderer: dotRenderer, radius: 5, weight: 1.5, color: '#fff',
+      fillColor: dotColor(p.op), fillOpacity: p.approx ? .45 : .95, dashArray: p.approx ? '2 2' : null,
+    });
+    dot.on('click', () => { select(p.id); openSheet(p); });
+    dot.addTo(dotLayer); dots.set(p.id, dot);
   }
 }
 function render() {

@@ -187,7 +187,8 @@ body[data-dock="expanded"] .fabs, body[data-dock="hidden"] .fabs { display: none
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
 .leaflet-container { font-family: var(--body); background: var(--bg); }
-.tiles { filter: saturate(.55) contrast(.95); }
+/* Sin filter en modo claro: en celulares un filter sobre la capa del mapa se repinta en cada cuadro al moverla. */
+.tiles { opacity: .82; }
 .tiles-dark { filter: invert(1) hue-rotate(180deg) saturate(.4) brightness(.85); }
 .leaflet-control-attribution { font-size: 10px; }
 .leaflet-bottom.leaflet-right { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--dock-h, 220px) + 14px); }
