@@ -544,3 +544,8 @@ $('#locBtn').onclick = () => {
 loadListings();
 startGeo();
 setTimeout(() => fallback('Tardamos en encontrar tu ubicación.'), 8000);
+
+// PWA: el service worker permite instalar la app y abrirla sin conexión.
+if ('serviceWorker' in navigator) {
+  addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+}

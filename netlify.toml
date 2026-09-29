@@ -5,6 +5,17 @@
   # (Los avisos viven en la rama `data` y no pasan por Netlify.)
   ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- public/ netlify.toml"
 
+# El service worker se revisa en cada visita para que las actualizaciones lleguen enseguida.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json"
+
 [dev]
   framework = "#static"
   publish = "public"

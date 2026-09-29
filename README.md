@@ -7,6 +7,12 @@ Web app para recorrer un barrio caminando y ver en el mapa las propiedades en ve
 - **Actualización:** el workflow `.github/workflows/crawl.yml` corre todos los días y commitea en la rama `data`. Netlify no publica esa rama, así que actualizar avisos no consume deploys.
 - **Netlify:** solo compila cuando cambia `public/` o `netlify.toml` (regla `ignore`), porque cada deploy de producción consume créditos.
 
+## PWA
+
+- `public/manifest.webmanifest` y `public/sw.js`: la app se puede instalar y abrir sin conexión con los últimos avisos descargados. Los mapas de OpenStreetMap no se guardan (su política no lo permite).
+- Íconos en `public/icons/`, generados con `python3 tools/make-icons.py`.
+- Si cambian los archivos de la app, subir `VERSION` en `sw.js` para que se descarte la copia vieja.
+
 ## Crawler
 
 - Se identifica como `CuadraBot/0.1 (+https://github.com/gerostone/cuadra)`, respeta `robots.txt`, hace un pedido por vez a cada sitio con 1,5 s de pausa y deja de pedirle a un sitio que responde 401/403/429/503.
