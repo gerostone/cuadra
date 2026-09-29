@@ -1,5 +1,5 @@
 // Crawler de Cuadra: recorre los sitios de inmobiliarias listados en sources.json
-// y genera public/data/listings.json.
+// y genera listings.json, que la app lee desde la rama `data` del repo.
 //
 // Reglas de cortesía:
 // - Se identifica como CuadraBot con un link al proyecto.
@@ -7,77 +7,30 @@
 // - Hace un pedido por vez a cada sitio, con pausa entre pedidos.
 // - Si un sitio responde 401/403/429/503, deja de pedirle hasta la próxima corrida.
 //
-// Uso: node crawler/run.mjs [--budget 300] [--only belga,izr] [--refresh]
+// Uso: node crawler/run.mjs [--data data] [--budget 300] [--only belga,izr] [--refresh]
+// Lee y escribe listings.json y state.json en la carpeta --data (por defecto ./data).
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { parseRobots, isAllowed } from './robots.mjs';
+import { politeClient, discover, Blocked } from './http.mjs';
 import { extract } from './extract.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = join(ROOT, 'public/data/listings.json');
-const STATE = join(ROOT, 'crawler/state.json');
-const UA = 'CuadraBot/0.1 (+https://github.com/gerostone/cuadra)';
-const DELAY = 1500;
 const STALE_DAYS = 7;
-const BLOCK = new Set([401, 403, 429, 503]);
 
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(`--${k}`); return i >= 0 ? args[i + 1] : d; };
 const BUDGET = Number(opt('budget', 300));
 const ONLY = opt('only', '')?.split(',').filter(Boolean);
+// Carpeta de datos: en GitHub Actions es un checkout de la rama `data`.
+const DATA = join(ROOT, opt('data', 'data'));
+const OUT = join(DATA, 'listings.json');
+const STATE = join(DATA, 'state.json');
 const REFRESH = args.includes('--refresh'); // vuelve a leer todas las fichas, aunque estén al día
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const readJson = async (p, d) => { try { return JSON.parse(await readFile(p, 'utf8')); } catch { return d; } };
-
-class Blocked extends Error {}
-function politeClient() {
-  let last = 0;
-  return async function get(url) {
-    const wait = last + DELAY - Date.now();
-    if (wait > 0) await sleep(wait);
-    last = Date.now();
-    let res;
-    try {
-      res = await fetch(url, { headers: { 'user-agent': UA, accept: 'text/html,application/xml;q=0.9,*/*;q=0.8' }, redirect: 'follow', signal: AbortSignal.timeout(30000) });
-    } catch (e) {
-      return { status: 0, text: '', error: e.cause?.code || e.name };
-    }
-    if (BLOCK.has(res.status)) throw new Blocked(`${res.status} en ${url}`);
-    return { status: res.status, url: res.url, text: res.ok ? await res.text() : '' };
-  };
-}
-
-async function discover(src, get, rules, robotsSitemaps) {
-  const re = new RegExp(src.match, 'i');
-  const queue = robotsSitemaps.length ? [...robotsSitemaps] : [`${src.site}/sitemap.xml`, `${src.site}/sitemap_index.xml`, `${src.site}/wp-sitemap.xml`];
-  const seenMaps = new Set();
-  const urls = new Set();
-  let found = false;
-  while (queue.length && seenMaps.size < 30) {
-    const sm = queue.shift();
-    if (seenMaps.has(sm)) continue;
-    seenMaps.add(sm);
-    if (!isAllowed(rules, new URL(sm, src.site).pathname)) continue;
-    const r = await get(sm);
-    if (r.status !== 200 || !/<(urlset|sitemapindex)/.test(r.text)) continue;
-    found = true;
-    const locs = [...r.text.matchAll(/<loc>\s*(?:<!\[CDATA\[)?([^<\]]+)/g)].map(m => m[1].trim());
-    if (/<sitemapindex/.test(r.text)) {
-      // Priorizamos los sitemaps de propiedades y salteamos los de blog, páginas y categorías.
-      const children = locs.filter(u => !/post-sitemap|page-sitemap|posts-page|taxonom|category|tag|author|blog/i.test(u));
-      queue.push(...children.sort((a, b) => /propert|propiedad|inmueble/i.test(b) - /propert|propiedad|inmueble/i.test(a)));
-    } else {
-      for (const u of locs) {
-        let p;
-        try { p = new URL(u); } catch { continue; }
-        if (re.test(p.pathname) && isAllowed(rules, p.pathname)) urls.add(p.href);
-      }
-    }
-  }
-  return { found, urls: [...urls] };
-}
 
 async function crawlSource(src, state, now) {
   const get = politeClient();

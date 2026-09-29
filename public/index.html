@@ -330,11 +330,13 @@ function listingsInCell(cx, cy) {
   return out;
 }
 
-// ---------- Fuente de avisos: /data/listings.json (lo genera el crawler), o ejemplos si está vacío ----------
+// ---------- Fuente de avisos: listings.json de la rama `data` (lo genera el crawler), o ejemplos si no hay ----------
+// Se sirve desde GitHub para que actualizar avisos no requiera un deploy en Netlify.
+const DATA_URL = 'https://raw.githubusercontent.com/gerostone/cuadra/data/listings.json';
 const remote = { mode: 'pending', listings: [], agencies: 0 };
 async function loadListings() {
   try {
-    const res = await fetch('/data/listings.json', { cache: 'no-cache' });
+    const res = await fetch(DATA_URL);
     const data = res.ok ? await res.json() : null;
     if (data?.listings?.length) Object.assign(remote, { mode: 'web', listings: data.listings, agencies: data.agencies });
     else remote.mode = 'demo';
@@ -408,6 +410,7 @@ const trail = L.polyline([], { color: '#e0342b', weight: 4, opacity: .55, dashAr
 const layer = L.layerGroup().addTo(map);
 const markers = new Map();
 map.on('dragstart', () => { state.follow = false; });
+map.on('moveend', () => { if (state.pos) renderMarkers(); });
 map.on('click', e => { if (state.walking) { state.walkTarget = e.latlng; toast('Caminando hacia ese punto…'); } });
 
 // ---------- Ubicación ----------
@@ -476,6 +479,43 @@ function passes(p) {
 }
 let lastIds = '';
 const byId = new Map();
+let lastAround = [];
+const MAX_PINS = 400;
+
+// Avisos dentro de lo que se ve del mapa, para que al recorrerlo aparezcan todos,
+// no solo los cercanos a tu ubicación.
+function viewportListings() {
+  const b = map.getBounds().pad(0.1);
+  const inView = p => b.contains([p.lat, p.lng]) && passes(p);
+  if (remote.mode === 'web') return remote.listings.filter(inView);
+  if (remote.mode === 'demo' && map.getZoom() >= 15) {
+    const c = map.getCenter();
+    return listingsAround({ lat: c.lat, lng: c.lng }, c.distanceTo(b.getNorthEast())).map(o => o.p).filter(inView);
+  }
+  return [];
+}
+function renderMarkers() {
+  const set = new Map(lastAround.map(o => [o.p.id, o.p]));
+  const c = map.getCenter();
+  viewportListings()
+    .sort((x, y) => c.distanceTo([x.lat, x.lng]) - c.distanceTo([y.lat, y.lng]))
+    .slice(0, MAX_PINS)
+    .forEach(p => set.set(p.id, p));
+  for (const [id, mk] of markers) if (!set.has(id)) { layer.removeLayer(mk); markers.delete(id); }
+  for (const p of set.values()) {
+    byId.set(p.id, p);
+    const cls = `pin ${p.op}${state.favs.has(p.id) ? ' fav' : ''}${state.seen.has(p.id) ? ' seen' : ''}${state.sel === p.id ? ' sel' : ''}`;
+    let mk = markers.get(p.id);
+    if (!mk) {
+      mk = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: cls, html: `<div>${shortPrice(p)}</div>`, iconSize: [0, 0] }), keyboard: true, title: `${p.type} en ${p.op}, ${p.address}` });
+      mk.on('click', () => { select(p.id, false); openSheet(p); });
+      mk.addTo(layer); markers.set(p.id, mk);
+    } else if (mk.cls !== cls) {
+      mk.setIcon(L.divIcon({ className: cls, html: `<div>${shortPrice(p)}</div>`, iconSize: [0, 0] }));
+    }
+    mk.cls = cls;
+  }
+}
 function render() {
   if (!state.pos) return;
   let radius = RADIUS, around;
@@ -490,21 +530,8 @@ function render() {
   }
   for (const { p } of around) byId.set(p.id, p);
   const inRadius = around.filter(o => o.d <= radius);
-  // marcadores (un poco más allá del radio para que el mapa no se vea vacío)
-  const keep = new Set(around.map(o => o.p.id));
-  for (const [id, mk] of markers) if (!keep.has(id)) { layer.removeLayer(mk); markers.delete(id); }
-  for (const { p } of around) {
-    const cls = `pin ${p.op}${state.favs.has(p.id) ? ' fav' : ''}${state.seen.has(p.id) ? ' seen' : ''}${state.sel === p.id ? ' sel' : ''}`;
-    let mk = markers.get(p.id);
-    if (!mk) {
-      mk = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: cls, html: `<div>${shortPrice(p)}</div>`, iconSize: [0, 0] }), keyboard: true, title: `${p.type} en ${p.op}, ${p.address}` });
-      mk.on('click', () => { select(p.id, true); openSheet(p); });
-      mk.addTo(layer); markers.set(p.id, mk);
-    } else if (mk.cls !== cls) {
-      mk.setIcon(L.divIcon({ className: cls, html: `<div>${shortPrice(p)}</div>`, iconSize: [0, 0] }));
-    }
-    mk.cls = cls;
-  }
+  lastAround = around;
+  renderMarkers();
   // avisos cercanos
   for (const { p, d } of inRadius) {
     if (d < NEAR && !state.notified.has(p.id)) {
