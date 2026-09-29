@@ -1,4 +1,4 @@
-import { RADIUS, NEAR, dist, fmtM, walkMin, esc, shortPrice, fullPrice, expLabel, perM2, passes, priceAmount, priceSuffix, listingSummary, opLabel } from './ui.js';
+import { RADIUS, NEAR, dist, fmtM, walkMin, esc, shortPrice, fullPrice, expLabel, perM2, passes, priceAmount, priceSuffix, listingSummary, opLabel, signLabel, activeFilterCount, sourceLabel } from './ui.js';
 import { CELL, listingsInCell, drawFacade } from './demo.js';
 
 // ---------- Utilidades ----------
@@ -140,39 +140,45 @@ function render() {
   }
   // estado
   renderStatus();
-  $('#count').textContent = inRadius.length;
-  const src = remote.mode === 'web' ? `de ${remote.agencies} ${remote.agencies === 1 ? 'inmobiliaria' : 'inmobiliarias'}` : remote.mode === 'demo' ? '· ejemplos' : '· cargando…';
-  $('#countLabel').textContent = `${inRadius.length === 1 ? 'propiedad' : 'propiedades'} a ${RADIUS} m ${src}`;
-  // tarjetas
+  renderDock(inRadius);
+}
+function renderDock(inRadius) {
+  if (remote.mode === 'pending') { $('#countLabel').textContent = 'Cargando avisos…'; return; } // queda el esqueleto
+  const n = inRadius.length;
+  $('#count').textContent = n;
+  $('#countLabel').innerHTML = `cerca tuyo<br>a 5 cuadras · ${sourceLabel(remote.mode, remote.agencies)}`;
   const top = inRadius.slice(0, 24);
+  $('#empty').hidden = top.length > 0;
+  if (!top.length) {
+    const noData = remote.mode === 'web' && !listingsAround(state.pos, RADIUS).length;
+    $('#emptyText').textContent = noData
+      ? 'Todavía no tenemos avisos de inmobiliarias en esta zona. Caminá hacia otro barrio o volvé más adelante.'
+      : 'No hay propiedades con esos filtros a 5 cuadras.';
+    $('#emptyClear').hidden = noData || (state.op === 'todo' && !activeFilterCount(state));
+  }
   const ids = top.map(o => o.p.id + (state.favs.has(o.p.id) ? '*' : '') + (state.sel === o.p.id ? '!' : '')).join(',');
   const cards = $('#cards');
-  $('#empty').hidden = top.length > 0;
-  $('#empty').textContent = remote.mode === 'web' && !listingsAround(state.pos, RADIUS).length
-    ? 'Todavía no tenemos avisos de inmobiliarias en esta zona. Caminá hacia otro barrio o volvé más adelante.'
-    : 'No hay propiedades con esos filtros en esta zona. Caminá unas cuadras o aflojá los filtros.';
   if (ids !== lastIds) {
     lastIds = ids;
-    cards.innerHTML = '';
-    for (const { p, d } of top) {
-      const b = document.createElement('button');
-      b.className = 'card' + (state.sel === p.id ? ' sel' : ''); b.dataset.id = p.id;
-      const thumb = p.photos?.length ? `<img src="${esc(p.photos[0])}" alt="" loading="lazy">` : '<canvas></canvas>';
-      b.innerHTML = `<div class="thumb">${thumb}</div><div class="body">
-        <span class="tag ${p.op}">${p.op === 'venta' ? 'Venta' : 'Alquiler'}</span>
-        <span class="price">${fullPrice(p)}</span>
-        <span class="sub">${expLabel(p, ' expensas')}</span>
-        <span class="addr">${state.favs.has(p.id) ? '♥ ' : ''}${esc(p.address)}</span>
-        <span class="sub">${esc(p.type)}${p.amb ? ` · ${p.amb} amb.` : ''}${p.m2 ? ` · ${p.m2} m²` : ''}</span>
-        <span class="dist" data-d>${fmtM(d)} · ${walkMin(d)} min a pie</span></div>`;
-      b.onclick = () => { select(p.id, true); openSheet(p); };
-      cards.appendChild(b);
-      const cv = b.querySelector('canvas'); if (cv) drawFacade(cv, p);
-    }
+    cards.replaceChildren(...top.map(({ p, d }) => cardEl(p, d)));
+    cards.querySelectorAll('canvas').forEach(cv => drawFacade(cv, byId.get(cv.closest('[data-id]').dataset.id)));
   } else {
     // solo actualizar distancias
-    top.forEach(({ d }, i) => { const el = cards.children[i]?.querySelector('[data-d]'); if (el) el.textContent = `${fmtM(d)} · ${walkMin(d)} min a pie`; });
+    top.forEach(({ d }, i) => { const el = cards.children[i]?.querySelector('[data-d]'); if (el) el.textContent = `${fmtM(d)} · ${walkMin(d)} min`; });
   }
+}
+function cardEl(p, d) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'card' + (state.sel === p.id ? ' sel' : ''); b.dataset.id = p.id;
+  const thumb = p.photos?.length ? `<img src="${esc(p.photos[0])}" alt="" loading="lazy">` : '<canvas></canvas>';
+  b.innerHTML = `<span class="thumb">${thumb}</span><span class="card-body">
+      <span class="tag ${p.op}">${signLabel(p)}</span>
+      <span class="card-price">${esc(priceAmount(p))}<small>${priceSuffix(p)}</small></span>
+      <span class="card-meta">${esc(listingSummary(p))} · <span data-d>${fmtM(d)} · ${walkMin(d)} min</span></span>
+      <span class="card-addr">${state.favs.has(p.id) ? '♥ ' : ''}${esc(p.address)}</span>
+    </span><span class="card-go" aria-hidden="true">Ver</span>`;
+  b.onclick = () => { select(p.id, true); openSheet(p); };
+  return b;
 }
 function trailLength() { const ll = trail.getLatLngs(); let s = 0; for (let i = 1; i < ll.length; i++) s += dist(ll[i - 1], ll[i]); return s; }
 function renderStatus() {
@@ -188,6 +194,53 @@ function select(id, pan) {
   const p = byId.get(id);
   if (pan && p) { state.follow = false; map.panTo([p.lat, p.lng]); }
 }
+
+// ---------- Panel inferior ----------
+// Tres estados: peek (la más cercana), expanded (lista completa) y hidden (con una hoja abierta).
+let dockDragged = false;
+function setDock(s) {
+  const dock = $('#dock');
+  dock.dataset.state = s; document.body.dataset.dock = s;
+  $('#dockGrab').setAttribute('aria-expanded', s === 'expanded');
+  $('#dockGrab').setAttribute('aria-label', s === 'expanded' ? 'Achicar la lista' : 'Ver la lista completa');
+  if (s !== 'expanded') $('#dockList').scrollTop = 0;
+}
+function toggleDock() { setDock($('#dock').dataset.state === 'expanded' ? 'peek' : 'expanded'); }
+// Los botones del mapa se acomodan arriba del panel achicado.
+function syncDockHeight() {
+  const dock = $('#dock');
+  if (dock.dataset.state === 'peek') document.documentElement.style.setProperty('--dock-h', dock.offsetHeight + 'px');
+}
+new ResizeObserver(syncDockHeight).observe($('#dock'));
+function dockGesture(el) {
+  let y0 = null, dy = 0;
+  el.addEventListener('pointerdown', e => {
+    if (e.target.closest('button') && e.target.closest('button') !== $('#dockGrab')) return; // Filtros tiene su propio click
+    y0 = e.clientY; dy = 0; dockDragged = false;
+    el.setPointerCapture(e.pointerId); $('#dock').classList.add('dragging');
+  });
+  el.addEventListener('pointermove', e => {
+    if (y0 == null) return;
+    dy = e.clientY - y0;
+    if (Math.abs(dy) > 8) dockDragged = true;
+    const expanded = $('#dock').dataset.state === 'expanded';
+    $('#dock').style.transform = `translateY(${expanded ? Math.max(0, dy) : Math.max(-40, Math.min(0, dy))}px)`;
+  });
+  const end = () => {
+    if (y0 == null) return;
+    const dock = $('#dock'), s = dock.dataset.state;
+    dock.classList.remove('dragging'); dock.style.transform = '';
+    if (dy < -40 && s === 'peek') setDock('expanded');
+    else if (dy > 40 && s === 'expanded') setDock('peek');
+    y0 = null;
+  };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+}
+dockGesture($('#dockGrab'));
+dockGesture($('.dock-head'));
+$('#dockGrab').addEventListener('click', () => { if (!dockDragged) toggleDock(); });
+$('.dock-head').addEventListener('click', e => { if (!dockDragged && !e.target.closest('button')) toggleDock(); });
+setDock('peek');
 
 // ---------- Ficha ----------
 function openSheet(p) {
@@ -282,18 +335,27 @@ function passingAlert(p, d) {
 }
 
 // ---------- Filtros ----------
-function segment(id, attr, key, parse) {
-  $(id).addEventListener('click', e => {
-    const b = e.target.closest('button'); if (!b) return;
-    $(id).querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
-    state[key] = parse(b.dataset[attr]); lastIds = ''; render();
-  });
+// Cualquier botón con data-op, data-amb o data-flag cambia el filtro, esté en el panel, en la hoja de filtros o en la barra.
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-op], [data-amb], [data-flag]');
+  if (!b) return;
+  if (b.dataset.op) state.op = b.dataset.op;
+  else if (b.dataset.amb) state.amb = Number(b.dataset.amb);
+  else state[b.dataset.flag] = !state[b.dataset.flag];
+  syncFilterControls(); lastIds = ''; render();
+});
+function syncFilterControls() {
+  document.querySelectorAll('[data-op]').forEach(b => b.setAttribute('aria-pressed', b.dataset.op === state.op));
+  document.querySelectorAll('[data-amb]').forEach(b => b.setAttribute('aria-pressed', Number(b.dataset.amb) === state.amb));
+  document.querySelectorAll('[data-flag]').forEach(b => b.setAttribute('aria-pressed', !!state[b.dataset.flag]));
+  const n = activeFilterCount(state);
+  $('#filtersBadge').textContent = n; $('#filtersBadge').hidden = !n;
 }
-segment('#opSeg', 'op', 'op', v => v);
-segment('#ambSeg', 'amb', 'amb', Number);
-for (const [id, key] of [['#favChip', 'fav'], ['#petChip', 'pets'], ['#credChip', 'cred']]) {
-  $(id).onclick = () => { state[key] = !state[key]; $(id).setAttribute('aria-pressed', state[key]); lastIds = ''; render(); };
+function clearFilters(all) {
+  Object.assign(state, { amb: 0, fav: false, pets: false, cred: false }, all ? { op: 'todo' } : {});
+  syncFilterControls(); lastIds = ''; render();
 }
+$('#emptyClear').onclick = () => clearFilters(true);
 $('#walkBtn').onclick = toggleWalk;
 $('#locBtn').onclick = () => { state.follow = true; if (state.pos) map.setView(state.pos, 17); };
 

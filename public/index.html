@@ -15,11 +15,6 @@
 <header class="top">
   <div class="pill"><i class="mark" aria-hidden="true"></i><b>Cuadra</b><span class="live" id="liveDot" hidden></span><span id="status">Buscando tu ubicación…</span></div>
   <div class="filters" role="toolbar" aria-label="Filtros">
-    <div class="seg" id="opSeg">
-      <button data-op="todo" aria-pressed="true">Todo</button>
-      <button data-op="venta" aria-pressed="false">Venta</button>
-      <button data-op="alquiler" aria-pressed="false">Alquiler</button>
-    </div>
     <div class="seg" id="ambSeg" aria-label="Ambientes">
       <button data-amb="0" aria-pressed="true">Amb.</button>
       <button data-amb="1" aria-pressed="false">1</button>
@@ -27,9 +22,9 @@
       <button data-amb="3" aria-pressed="false">3</button>
       <button data-amb="4" aria-pressed="false">4+</button>
     </div>
-    <button class="chip" id="favChip" aria-pressed="false">♥ Guardadas</button>
-    <button class="chip" id="petChip" aria-pressed="false">Acepta mascotas</button>
-    <button class="chip" id="credChip" aria-pressed="false">Apto crédito</button>
+    <button class="chip" data-flag="fav" aria-pressed="false">♥ Guardadas</button>
+    <button class="chip" data-flag="pets" aria-pressed="false">Acepta mascotas</button>
+    <button class="chip" data-flag="cred" aria-pressed="false">Apto crédito</button>
   </div>
 </header>
 
@@ -42,10 +37,23 @@
   </button>
 </div>
 
-<section class="bottom" aria-label="Propiedades cerca tuyo">
-  <div class="bar-head"><div class="count"><span id="count">0</span> <span id="countLabel">propiedades a 500 m</span></div></div>
-  <div class="cards" id="cards"></div>
-  <div class="empty" id="empty" hidden>No hay propiedades con esos filtros en esta zona. Caminá unas cuadras o aflojá los filtros.</div>
+<section class="dock" id="dock" data-state="peek" aria-label="Propiedades cerca tuyo">
+  <button class="dock-grab" id="dockGrab" type="button" aria-expanded="false" aria-controls="dockList" aria-label="Ver la lista completa"><span></span></button>
+  <div class="dock-head">
+    <p class="dock-count"><b id="count">–</b><span id="countLabel">Buscando tu ubicación…</span></p>
+    <button class="dock-filters" id="filtersBtn" type="button" hidden>Filtros<i id="filtersBadge" hidden>0</i></button>
+  </div>
+  <div class="dock-list" id="dockList">
+    <div class="cards" id="cards">
+      <div class="card skeleton" aria-hidden="true"><span class="thumb"></span><span class="card-body"><span class="sk"></span><span class="sk short"></span></span></div>
+    </div>
+    <div class="empty" id="empty" hidden><p id="emptyText"></p><button type="button" class="btn-light" id="emptyClear" hidden>Limpiar filtros</button></div>
+  </div>
+  <div class="seg" id="opSeg" role="group" aria-label="Operación">
+    <button type="button" data-op="todo" aria-pressed="true">Todo</button>
+    <button type="button" data-op="venta" aria-pressed="false">Venta</button>
+    <button type="button" data-op="alquiler" aria-pressed="false">Alquiler</button>
+  </div>
 </section>
 
 <div id="alertWrap" aria-live="polite"></div>
