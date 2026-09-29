@@ -6,7 +6,7 @@
 //   muestran los últimos descargados.
 // - Mapas de OpenStreetMap: no se guardan acá. Su política de uso no permite
 //   almacenarlos en cantidad; queda el caché normal del navegador.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const APP = `cuadra-app-${VERSION}`;
 const DATA = 'cuadra-avisos';
 const SHELL = [
