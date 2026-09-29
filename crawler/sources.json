@@ -1,0 +1,38 @@
+[
+  {
+    "id": "belga",
+    "name": "Belga Inmobiliaria",
+    "site": "https://www.belga.com.ar",
+    "match": "/propiedad/\\d+"
+  },
+  {
+    "id": "izr",
+    "name": "Izrastzoff",
+    "site": "https://www.izr.com.ar",
+    "match": "/propiedades-(venta|alquiler)-"
+  },
+  {
+    "id": "cobas",
+    "name": "Cobas Propiedades",
+    "site": "https://www.cobaspropiedades.com",
+    "match": "/propiedad/"
+  },
+  {
+    "id": "mudarte",
+    "name": "Mudarte Online",
+    "site": "https://www.mudarteonline.com",
+    "match": "/propiedad/"
+  },
+  {
+    "id": "brick",
+    "name": "BRICK Propiedades",
+    "site": "https://brick.com.ar",
+    "match": "/propiedades/\\d+"
+  },
+  {
+    "id": "ocampo",
+    "name": "Ocampo Propiedades",
+    "site": "https://ocampopropiedades.com",
+    "match": "/propiedades/[a-z0-9-]{10,}"
+  }
+]

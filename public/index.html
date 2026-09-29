@@ -277,6 +277,8 @@ const shortPrice = p => p.price == null ? 'Consultar' : `${cur(p)}${compact(p.pr
 const fullPrice = p => p.price == null ? 'Precio a consultar'
   : `${cur(p)} ${nf.format(p.price)}${p.op === 'alquiler' ? (p.temporario ? '/mes · temporario' : '/mes') : ''}`;
 const dash = v => v ? v : '—';
+// Los avisos de ejemplo saben si no tienen expensas; los reales, si no las publican, no lo sabemos.
+const expLabel = (p, suffix) => p.exp ? `+ $ ${nf.format(p.exp)}${suffix}` : p.source === 'demo' ? 'Sin expensas' : 'Expensas a consultar';
 
 // ---------- Generador de avisos (datos de ejemplo, deterministas por zona) ----------
 const CELL = 0.0012; // ~130 m
@@ -328,31 +330,22 @@ function listingsInCell(cx, cy) {
   return out;
 }
 
-// ---------- Fuente de avisos: Tokko vía /api/listings, o ejemplos si no hay conexión ----------
-const FETCH_R = 1500, REFETCH_AT = 600;
-const remote = { mode: 'pending', listings: [], center: null, agencies: 0, loading: false };
-async function refreshRemote() {
-  if (remote.loading || remote.mode === 'demo' || !state.pos) return;
-  if (remote.center && dist(remote.center, state.pos) < REFETCH_AT) return;
-  remote.loading = true;
-  // Redondeamos a ~100 m para que el CDN reutilice respuestas de la misma zona.
-  const q = { lat: +state.pos.lat.toFixed(3), lng: +state.pos.lng.toFixed(3) };
+// ---------- Fuente de avisos: /data/listings.json (lo genera el crawler), o ejemplos si está vacío ----------
+const remote = { mode: 'pending', listings: [], agencies: 0 };
+async function loadListings() {
   try {
-    const res = await fetch(`/api/listings?lat=${q.lat}&lng=${q.lng}&r=${FETCH_R}`);
+    const res = await fetch('/data/listings.json', { cache: 'no-cache' });
     const data = res.ok ? await res.json() : null;
-    if (data?.source === 'tokko') Object.assign(remote, { mode: 'tokko', listings: data.listings, center: q, agencies: data.agencies });
-    else if (data?.source === 'demo' || remote.mode === 'pending') {
-      if (!data) toast('No pudimos traer los avisos de las inmobiliarias. Te mostramos avisos de ejemplo.', 5000);
-      remote.mode = 'demo';
-    }
+    if (data?.listings?.length) Object.assign(remote, { mode: 'web', listings: data.listings, agencies: data.agencies });
+    else remote.mode = 'demo';
   } catch {
-    if (remote.mode === 'pending') remote.mode = 'demo';
+    remote.mode = 'demo';
   }
-  remote.loading = false; lastIds = ''; render();
+  lastIds = ''; render();
 }
 function listingsAround(pos, radius) {
   if (remote.mode === 'pending') return [];
-  if (remote.mode === 'tokko') return remote.listings.map(p => ({ p, d: dist(pos, p) })).filter(o => o.d <= radius).sort((a, b) => a.d - b.d);
+  if (remote.mode === 'web') return remote.listings.map(p => ({ p, d: dist(pos, p) })).filter(o => o.d <= radius).sort((a, b) => a.d - b.d);
   const span = Math.ceil(radius / (CELL * 111320 * Math.cos(pos.lat * Math.PI / 180))) + 1;
   const cx = Math.floor(pos.lng / CELL), cy = Math.floor(pos.lat / CELL);
   const all = [];
@@ -426,7 +419,6 @@ function setPos(lat, lng, acc, real) {
   if (!prev || dist(prev, state.pos) > 3) trail.addLatLng(state.pos);
   if (first) map.setView(state.pos, 17); else if (state.follow) map.panTo(state.pos, { animate: true, duration: .5 });
   render();
-  refreshRemote();
 }
 function startGeo() {
   if (!('geolocation' in navigator)) return fallback('Tu navegador no comparte ubicación.');
@@ -512,13 +504,16 @@ function render() {
     ? `<b>Modo paseo</b> · ${fmtM(trailLength())} recorridos`
     : state.real ? `<b>Ubicación en vivo</b> · ${fmtM(trailLength())} recorridos` : `<b>Palermo, CABA</b> · ubicación aproximada`;
   $('#count').textContent = inRadius.length;
-  const src = remote.mode === 'tokko' ? `de ${remote.agencies} ${remote.agencies === 1 ? 'inmobiliaria' : 'inmobiliarias'}` : remote.mode === 'demo' ? '· ejemplos' : '· cargando…';
+  const src = remote.mode === 'web' ? `de ${remote.agencies} ${remote.agencies === 1 ? 'inmobiliaria' : 'inmobiliarias'}` : remote.mode === 'demo' ? '· ejemplos' : '· cargando…';
   $('#countLabel').textContent = `${inRadius.length === 1 ? 'propiedad' : 'propiedades'} a ${RADIUS} m ${src}`;
   // tarjetas
   const top = inRadius.slice(0, 24);
   const ids = top.map(o => o.p.id + (state.favs.has(o.p.id) ? '*' : '') + (state.sel === o.p.id ? '!' : '')).join(',');
   const cards = $('#cards');
   $('#empty').hidden = top.length > 0;
+  $('#empty').textContent = remote.mode === 'web' && !listingsAround(state.pos, RADIUS).length
+    ? 'Todavía no tenemos avisos de inmobiliarias en esta zona. Caminá hacia otro barrio o volvé más adelante.'
+    : 'No hay propiedades con esos filtros en esta zona. Caminá unas cuadras o aflojá los filtros.';
   if (ids !== lastIds) {
     lastIds = ids;
     cards.innerHTML = '';
@@ -529,7 +524,7 @@ function render() {
       b.innerHTML = `<div class="thumb">${thumb}</div><div class="body">
         <span class="tag ${p.op}">${p.op === 'venta' ? 'Venta' : 'Alquiler'}</span>
         <span class="price">${fullPrice(p)}</span>
-        <span class="sub">${p.exp ? '+ $ ' + nf.format(p.exp) + ' expensas' : 'Sin expensas'}</span>
+        <span class="sub">${expLabel(p, ' expensas')}</span>
         <span class="addr">${state.favs.has(p.id) ? '♥ ' : ''}${esc(p.address)}</span>
         <span class="sub">${esc(p.type)}${p.amb ? ` · ${p.amb} amb.` : ''}${p.m2 ? ` · ${p.m2} m²` : ''}</span>
         <span class="dist" data-d>${fmtM(d)} · ${walkMin(d)} min a pie</span></div>`;
@@ -563,7 +558,7 @@ function openSheet(p) {
       <div class="sign tag ${p.op}">${p.op === 'venta' ? 'Vende' : 'Alquila'}</div></div>
     <div class="inner">
       <div><h2>${fullPrice(p)}</h2>
-        <div class="exp">${p.exp ? `+ $ ${nf.format(p.exp)} de expensas` : 'Sin expensas'}${p.op === 'venta' && p.price && p.m2 ? ` · ${cur(p)} ${nf.format(Math.round(p.price / p.m2))}/m²` : ''}</div></div>
+        <div class="exp">${expLabel(p, ' de expensas')}${p.op === 'venta' && p.price && p.m2 ? ` · ${cur(p)} ${nf.format(Math.round(p.price / p.m2))}/m²` : ''}</div></div>
       <div><div class="where">${esc(p.address)}${p.piso ? ', ' + esc(p.piso) : ''}</div>
         <div class="exp">${esc(p.type)}${p.zone ? ' en ' + esc(p.zone) : ''} · a ${fmtM(d)} de vos, ${walkMin(d)} min caminando${p.days != null ? ` · publicado hace ${p.days} ${p.days === 1 ? 'día' : 'días'}` : ''}</div></div>
       <div class="facts">
@@ -572,7 +567,7 @@ function openSheet(p) {
         <div><b>${dash(p.m2tot)}</b><span>m² tot.</span></div>
         <div><b>${p.antig === 0 ? 'Nuevo' : dash(p.antig)}</b><span>${p.antig === 0 ? 'A estrenar' : 'Años'}</span></div>
       </div>
-      <div class="feats">${[...new Set([...p.feats, ...(p.mascotas ? ['Acepta mascotas'] : []), ...(p.credito ? ['Apto crédito'] : [])])].map(f => `<span>${esc(f)}</span>`).join('')}${p.banos ? `<span>${p.banos} ${p.banos > 1 ? 'baños' : 'baño'}</span>` : ''}</div>
+      <div class="feats">${[...new Set([...(p.feats || []), ...(p.mascotas ? ['Acepta mascotas'] : []), ...(p.credito ? ['Apto crédito'] : [])])].map(f => `<span>${esc(f)}</span>`).join('')}${p.banos ? `<span>${p.banos} ${p.banos > 1 ? 'baños' : 'baño'}</span>` : ''}</div>
       ${p.desc ? `<p class="desc">${esc(p.desc)}</p>` : ''}
       <div class="agent"><div><b>${esc(p.agent)}</b>${p.source === 'demo' ? 'Aviso de ejemplo generado para esta demo'
         : [p.phone, p.email].filter(Boolean).map(c => `<span class="contact">${esc(c)}</span>`).join(' · ')
@@ -635,6 +630,7 @@ for (const [id, key] of [['#favChip', 'fav'], ['#petChip', 'pets'], ['#credChip'
 $('#walkBtn').onclick = toggleWalk;
 $('#locBtn').onclick = () => { state.follow = true; if (state.pos) map.setView(state.pos, 17); };
 
+loadListings();
 startGeo();
 setTimeout(() => fallback('Tardamos en encontrar tu ubicación.'), 8000);
 })();

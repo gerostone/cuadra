@@ -1,0 +1,173 @@
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Figtree:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter+Tight:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+.phones { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 28px; margin-top: 18px; }
+.dir { display: flex; flex-direction: column; gap: 12px; cursor: pointer; border-radius: 18px; padding: 10px; border: 2px solid transparent; }
+.dir.selected { border-color: currentColor; }
+.phone { width: 300px; height: 620px; margin: 0 auto; border-radius: 34px; overflow: hidden; position: relative; box-shadow: 0 0 0 8px #15191b, 0 18px 40px rgba(0,0,0,.25); }
+.phone svg.map { position: absolute; inset: 0; width: 100%; height: 100%; }
+.dir h3 { margin: 6px 0 0; }
+.dir p { margin: 0; font-size: 14px; line-height: 1.45; opacity: .85; }
+.dir ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; opacity: .85; }
+.abs { position: absolute; }
+.row { display: flex; align-items: center; }
+
+/* ---------- A: Cartel ---------- */
+.A { font-family: Figtree, sans-serif; color: #1b2124; }
+.A .top { top: 44px; left: 12px; right: 12px; gap: 8px; }
+.A .search { flex: 1; background: #fff; border-radius: 14px; height: 46px; box-shadow: 0 4px 16px rgba(0,0,0,.14); padding: 0 12px; gap: 8px; font-size: 13px; }
+.A .logo { width: 10px; height: 22px; background: linear-gradient(#1d4fd8 50%, #e2a400 50%); border-radius: 2px; }
+.A .search b { font: 800 18px/1 'Barlow Condensed'; letter-spacing: .03em; text-transform: uppercase; }
+.A .search span { color: #5d676b; }
+.A .fbtn { width: 46px; height: 46px; background: #fff; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.14); display: grid; place-items: center; position: relative; font-weight: 700; }
+.A .fbtn i { position: absolute; top: -4px; right: -4px; background: #1b2124; color: #fff; font: 700 10px/18px Figtree; width: 18px; border-radius: 9px; text-align: center; font-style: normal; }
+.A .seg { top: 100px; left: 12px; background: #fff; border-radius: 999px; padding: 4px; box-shadow: 0 4px 16px rgba(0,0,0,.14); font-size: 13px; font-weight: 700; }
+.A .seg span { padding: 8px 14px; border-radius: 999px; }
+.A .seg .on { background: #1b2124; color: #fff; }
+.A .pin { font: 800 13px/1 'Barlow Condensed'; padding: 5px 7px 4px; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+.A .v { background: #1d4fd8; color: #fff; } .A .a { background: #e2a400; color: #2a1f00; }
+.A .me { width: 16px; height: 16px; border-radius: 50%; background: #e0342b; border: 3px solid #fff; box-shadow: 0 0 0 10px rgba(224,52,43,.18); }
+.A .alert { top: 150px; left: 12px; right: 12px; background: #1b2124; color: #fff; border-radius: 14px; padding: 10px 12px; font-size: 12.5px; gap: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.3); }
+.A .alert .tag { font: 800 12px/1 'Barlow Condensed'; background: #e2a400; color: #2a1f00; padding: 4px 6px 3px; border-radius: 3px; letter-spacing: .06em; }
+.A .sheet { left: 0; right: 0; bottom: 0; height: 262px; background: #fff; border-radius: 22px 22px 0 0; box-shadow: 0 -6px 24px rgba(0,0,0,.14); padding: 8px 14px; }
+.A .grab { width: 36px; height: 5px; border-radius: 3px; background: #d0d4d2; margin: 0 auto 10px; }
+.A .sh { justify-content: space-between; font-size: 13px; color: #5d676b; margin-bottom: 8px; }
+.A .sh b { font: 800 22px/1 'Barlow Condensed'; color: #1b2124; text-transform: uppercase; }
+.A .item { gap: 12px; padding: 8px 0; border-top: 1px solid #eceeed; }
+.A .ph { width: 64px; height: 64px; border-radius: 10px; flex: none; }
+.A .price { font: 800 22px/1 'Barlow Condensed'; }
+.A .meta { font-size: 12px; color: #5d676b; margin-top: 3px; }
+.A .dist { margin-left: auto; font-size: 12px; font-weight: 700; text-align: right; }
+
+/* ---------- B: Plano ---------- */
+.B { font-family: 'IBM Plex Sans', sans-serif; color: #1f2a37; }
+.B .top { top: 44px; left: 14px; right: 14px; justify-content: space-between; }
+.B .brand { font: 700 22px/1 Fraunces, serif; letter-spacing: -.01em; }
+.B .brand em { color: #c2542d; font-style: normal; }
+.B .icon { width: 44px; height: 44px; border-radius: 50%; background: #fbf8f2; border: 1px solid #d8d0c2; display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+.B .chips { top: 98px; left: 14px; gap: 6px; font-size: 12.5px; }
+.B .chips span { background: #fbf8f2; border: 1px solid #d8d0c2; border-radius: 999px; padding: 8px 12px; }
+.B .chips .on { background: #1f2a37; color: #fbf8f2; border-color: #1f2a37; }
+.B .pin { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 600 10px/1 'IBM Plex Sans'; border: 2px solid #1f2a37; }
+.B .v { background: #1f2a37; color: #fbf8f2; } .B .a { background: #fbf8f2; color: #1f2a37; }
+.B .pinlabel { background: #fbf8f2; border: 1px solid #1f2a37; padding: 4px 7px; border-radius: 6px; font: 600 11px/1 'IBM Plex Sans'; }
+.B .me { width: 14px; height: 14px; border-radius: 50%; background: #c2542d; border: 3px solid #fbf8f2; box-shadow: 0 0 0 9px rgba(194,84,45,.16); }
+.B .alert { top: 146px; left: 14px; right: 14px; background: #fbf8f2; border: 1px solid #c2542d; border-left: 5px solid #c2542d; border-radius: 10px; padding: 10px 12px; font-size: 12.5px; }
+.B .alert small { display: block; color: #c2542d; font-weight: 600; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 2px; }
+.B .sheet { left: 0; right: 0; bottom: 0; height: 270px; background: #fbf8f2; border-top: 1px solid #d8d0c2; border-radius: 20px 20px 0 0; padding: 8px 16px; }
+.B .grab { width: 36px; height: 4px; border-radius: 3px; background: #cfc6b6; margin: 0 auto 12px; }
+.B .sh { font: 500 20px/1.1 Fraunces, serif; margin-bottom: 4px; }
+.B .sub { font-size: 12px; color: #6b7280; margin-bottom: 8px; }
+.B .item { gap: 12px; padding: 10px 0; border-top: 1px solid #e6dfd2; }
+.B .ph { width: 58px; height: 58px; border-radius: 8px; flex: none; }
+.B .price { font: 700 19px/1 Fraunces, serif; }
+.B .price small { font: 500 11px 'IBM Plex Sans'; color: #6b7280; margin-left: 4px; }
+.B .meta { font-size: 12px; color: #6b7280; margin-top: 4px; }
+.B .dist { margin-left: auto; font-size: 11.5px; color: #1f2a37; text-align: right; font-weight: 600; }
+
+/* ---------- C: Vereda (sunlight contrast) ---------- */
+.C { font-family: 'Inter Tight', sans-serif; color: #0d0d0d; }
+.C .alert { top: 40px; left: 10px; right: 10px; background: #d7ff3a; border-radius: 18px; padding: 12px 14px; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+.C .alert small { font-weight: 800; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.C .alert div { font-weight: 800; font-size: 20px; line-height: 1.1; margin-top: 3px; }
+.C .alert span { font-weight: 600; font-size: 12.5px; }
+.C .pin { background: #0d0d0d; color: #fff; font: 800 12px/1 'Inter Tight'; padding: 6px 8px; border-radius: 8px; border: 2px solid #fff; }
+.C .pin.a { background: #fff; color: #0d0d0d; border-color: #0d0d0d; }
+.C .pin.hot { background: #d7ff3a; color: #0d0d0d; border-color: #0d0d0d; transform: scale(1.15); }
+.C .me { width: 20px; height: 20px; border-radius: 50%; background: #2f6bff; border: 4px solid #fff; box-shadow: 0 0 0 12px rgba(47,107,255,.2); }
+.C .dock { left: 10px; right: 10px; bottom: 16px; background: #0d0d0d; color: #fff; border-radius: 24px; padding: 14px; }
+.C .dh { justify-content: space-between; margin-bottom: 10px; }
+.C .dh b { font-size: 30px; font-weight: 800; line-height: 1; }
+.C .dh span { font-size: 12px; opacity: .7; }
+.C .card { background: #1d1d1d; border-radius: 16px; padding: 10px; gap: 10px; margin-bottom: 8px; }
+.C .ph { width: 56px; height: 56px; border-radius: 10px; flex: none; }
+.C .price { font-weight: 800; font-size: 20px; }
+.C .meta { font-size: 12px; opacity: .7; margin-top: 2px; }
+.C .go { margin-left: auto; background: #d7ff3a; color: #0d0d0d; border-radius: 12px; font-weight: 800; font-size: 13px; padding: 12px 12px; }
+.C .bar { gap: 8px; margin-top: 4px; }
+.C .bar span { flex: 1; text-align: center; background: #2a2a2a; border-radius: 12px; padding: 12px 0; font-size: 13px; font-weight: 700; }
+.C .bar .on { background: #fff; color: #0d0d0d; }
+</style>
+
+<h2>Three directions for Cuadra</h2>
+<p class="subtitle">All three are for house hunters on foot, drawn at phone width with the same situation: you've just walked past a listing. Pick the one that feels right; mixing is fine too ("B's calm, but A's colors").</p>
+
+<div class="phones">
+
+  <!-- A -->
+  <div class="dir" data-choice="a" onclick="toggleSelect(this)">
+    <div class="phone A">
+      <svg class="map" viewBox="0 0 300 620"><rect width="300" height="620" fill="#e9ebe7"/>
+        <g stroke="#fff" stroke-width="14"><path d="M-40 120 L340 20"/><path d="M-40 260 L340 160"/><path d="M-40 400 L340 300"/><path d="M-40 540 L340 440"/><path d="M40 -20 L140 640"/><path d="M170 -20 L270 640"/></g>
+        <g fill="#cfe3c8"><path d="M200 330 l40 -10 l8 40 l-40 10z"/></g>
+        <circle cx="150" cy="300" r="120" fill="none" stroke="#1b2124" stroke-opacity=".3" stroke-dasharray="3 5"/></svg>
+      <div class="abs row top"><div class="row search"><span class="logo"></span><b>Cuadra</b><span>· Palermo, en vivo</span></div><div class="fbtn">⚙<i>2</i></div></div>
+      <div class="abs row seg"><span class="on">Todo</span><span>Venta</span><span>Alquiler</span></div>
+      <div class="abs row alert"><span class="tag">Alquila</span><div><b>Gorriti 4812</b> · a 30 m<br>2 amb · $ 650.000/mes</div></div>
+      <div class="abs pin v" style="left:40px;top:230px">US$130k</div>
+      <div class="abs pin a" style="left:168px;top:258px">$650k</div>
+      <div class="abs pin v" style="left:206px;top:212px">US$240k</div>
+      <div class="abs pin a" style="left:70px;top:318px">$480k</div>
+      <div class="abs me" style="left:142px;top:292px"></div>
+      <div class="abs sheet"><div class="grab"></div>
+        <div class="row sh"><b>12 cerca tuyo</b><span>Más cerca ▾</span></div>
+        <div class="row item"><div class="ph" style="background:linear-gradient(135deg,#d9b48f,#8a6a4f)"></div><div><div class="price">$ 650.000</div><div class="meta">Depto · 2 amb · 48 m²</div><div class="meta">Gorriti 4812</div></div><div class="dist">30 m<br><span style="font-weight:500;color:#5d676b">1 min</span></div></div>
+        <div class="row item"><div class="ph" style="background:linear-gradient(135deg,#a9c0d8,#4d6a8a)"></div><div><div class="price">US$ 130.000</div><div class="meta">PH · 3 amb · 81 m²</div><div class="meta">Godoy Cruz 1800</div></div><div class="dist">320 m<br><span style="font-weight:500;color:#5d676b">4 min</span></div></div>
+      </div>
+    </div>
+    <h3>A · Cartel</h3>
+    <p>Builds on today's identity: blue and yellow For Sale / For Rent signs, condensed poster type. It becomes a proper product: one search bar, a filter button with a count, and a draggable list at the bottom.</p>
+    <ul><li>Most familiar; reads as "real estate" instantly</li><li>Bold prices, easy to scan in a list</li><li>Busier: two strong colors plus the map</li></ul>
+  </div>
+
+  <!-- B -->
+  <div class="dir" data-choice="b" onclick="toggleSelect(this)">
+    <div class="phone B">
+      <svg class="map" viewBox="0 0 300 620"><rect width="300" height="620" fill="#f1ece2"/>
+        <g stroke="#fbf8f2" stroke-width="12"><path d="M-40 120 L340 20"/><path d="M-40 260 L340 160"/><path d="M-40 400 L340 300"/><path d="M-40 540 L340 440"/><path d="M40 -20 L140 640"/><path d="M170 -20 L270 640"/></g>
+        <g stroke="#e0d8c9" stroke-width="1"><path d="M-40 120 L340 20"/><path d="M-40 260 L340 160"/><path d="M-40 400 L340 300"/></g>
+        <path d="M200 330 l40 -10 l8 40 l-40 10z" fill="#dfe4cf"/>
+        <circle cx="150" cy="300" r="120" fill="none" stroke="#c2542d" stroke-opacity=".35" stroke-dasharray="2 6"/></svg>
+      <div class="abs row top"><div class="brand">cuadra<em>.</em></div><div class="icon">≡</div></div>
+      <div class="abs row chips"><span class="on">Todo</span><span>Venta</span><span>Alquiler</span><span>Filtros · 2</span></div>
+      <div class="abs alert"><small>Estás pasando por</small><b>Gorriti 4812</b> · 2 amb en alquiler · $ 650.000</div>
+      <div class="abs pin v" style="left:44px;top:232px">V</div>
+      <div class="abs row" style="left:160px;top:252px;gap:4px"><div class="pin a">A</div><div class="pinlabel">$650k</div></div>
+      <div class="abs pin v" style="left:216px;top:210px">V</div>
+      <div class="abs pin a" style="left:74px;top:318px">A</div>
+      <div class="abs me" style="left:143px;top:293px"></div>
+      <div class="abs sheet"><div class="grab"></div>
+        <div class="sh">12 propiedades a cinco cuadras</div><div class="sub">Ordenadas por distancia · 6 inmobiliarias</div>
+        <div class="row item"><div class="ph" style="background:linear-gradient(135deg,#d9b48f,#8a6a4f)"></div><div><div class="price">$ 650.000<small>/mes</small></div><div class="meta">Gorriti 4812 · 2 amb · 48 m²</div></div><div class="dist">30 m</div></div>
+        <div class="row item"><div class="ph" style="background:linear-gradient(135deg,#a9c0d8,#4d6a8a)"></div><div><div class="price">US$ 130.000</div><div class="meta">Godoy Cruz 1800 · PH · 81 m²</div></div><div class="dist">320 m</div></div>
+      </div>
+    </div>
+    <h3>B · Plano</h3>
+    <p>Calm and trustworthy, like a well-made city map. Warm paper tones, one terracotta accent, a serif for prices. Sale vs. rent shown as filled vs. outlined pins, not two loud colors.</p>
+    <ul><li>Feels considered and premium; least visual noise</li><li>Best for comparing and deciding</li><li>Less "street energy"; prices read a bit quieter</li></ul>
+  </div>
+
+  <!-- C -->
+  <div class="dir" data-choice="c" onclick="toggleSelect(this)">
+    <div class="phone C">
+      <svg class="map" viewBox="0 0 300 620"><rect width="300" height="620" fill="#f4f4f2"/>
+        <g stroke="#fff" stroke-width="16"><path d="M-40 120 L340 20"/><path d="M-40 260 L340 160"/><path d="M-40 400 L340 300"/><path d="M-40 540 L340 440"/><path d="M40 -20 L140 640"/><path d="M170 -20 L270 640"/></g>
+        <g stroke="#dcdcd8" stroke-width="1.5"><path d="M-40 260 L340 160"/><path d="M40 -20 L140 640"/><path d="M170 -20 L270 640"/></g>
+        <circle cx="150" cy="300" r="120" fill="rgba(47,107,255,.05)" stroke="#2f6bff" stroke-opacity=".3"/></svg>
+      <div class="abs alert"><small>A 30 m · a tu derecha</small><div>$ 650.000/mes</div><span>Gorriti 4812 · 2 amb · alquiler</span></div>
+      <div class="abs pin" style="left:40px;top:232px">130k</div>
+      <div class="abs pin a hot" style="left:166px;top:256px">650k</div>
+      <div class="abs pin" style="left:210px;top:212px">240k</div>
+      <div class="abs pin a" style="left:70px;top:318px">480k</div>
+      <div class="abs me" style="left:140px;top:290px"></div>
+      <div class="abs dock">
+        <div class="row dh"><b>12</b><span>cerca tuyo · filtros (2)</span></div>
+        <div class="row card"><div class="ph" style="background:linear-gradient(135deg,#d9b48f,#8a6a4f)"></div><div><div class="price">$ 650k</div><div class="meta">2 amb · 48 m² · 30 m</div></div><div class="go">Ver</div></div>
+        <div class="row bar"><span class="on">Todo</span><span>Venta</span><span>Alquiler</span></div>
+      </div>
+    </div>
+    <h3>C · Vereda</h3>
+    <p>Built for the street: maximum contrast for sunlight, huge tap targets, everything within thumb reach at the bottom. The proximity alert is the hero, in a single neon accent.</p>
+    <ul><li>Easiest to use while walking, one-handed, in bright sun</li><li>Alert tells you <i>where</i> ("a tu derecha")</li><li>Most utilitarian; weaker for browsing and comparing</li></ul>
+  </div>
+
+</div>

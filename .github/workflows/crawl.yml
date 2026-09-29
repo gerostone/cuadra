@@ -1,0 +1,40 @@
+name: Actualizar avisos
+
+on:
+  schedule:
+    - cron: '0 7 * * *' # 04:00 en Argentina
+  workflow_dispatch:
+    inputs:
+      budget:
+        description: Fichas máximas por inmobiliaria
+        default: '300'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: crawl
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+      - run: node crawler/run.mjs --budget "${{ inputs.budget || '300' }}"
+      - name: Commitear avisos si cambiaron
+        run: |
+          if git diff --quiet -- public/data crawler/state.json; then
+            echo "Sin cambios en los avisos."
+            exit 0
+          fi
+          git config user.name "cuadra-bot"
+          git config user.email "cuadra-bot@users.noreply.github.com"
+          git add public/data crawler/state.json
+          git commit -m "Actualizar avisos ($(node -p "require('./public/data/listings.json').listings.length") con ubicación)"
+          git push

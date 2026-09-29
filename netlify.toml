@@ -1,9 +1,11 @@
 [build]
   publish = "public"
-  functions = "netlify/functions"
+  command = "npm test"
 
-[functions]
-  node_bundler = "esbuild"
+[[headers]]
+  for = "/data/*"
+  [headers.values]
+    Cache-Control = "public, max-age=300"
 
 [dev]
   framework = "#static"
