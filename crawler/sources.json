@@ -34,5 +34,17 @@
     "name": "Ocampo Propiedades",
     "site": "https://ocampopropiedades.com",
     "match": "/propiedades/[a-z0-9-]{10,}"
+  },
+  {
+    "id": "predial",
+    "name": "Predial – Evolución Inmobiliaria",
+    "site": "https://predial.ar",
+    "match": "/propiedad/"
+  },
+  {
+    "id": "larocca",
+    "name": "Larocca Propiedades",
+    "site": "https://www.laroccapropiedades.com",
+    "match": "/busqueda/ver/"
   }
 ]

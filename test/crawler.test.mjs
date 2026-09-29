@@ -91,3 +91,13 @@ test('robots.txt: prioriza el grupo de CuadraBot y la regla más específica', (
   const own = parseRobots(`User-agent: *\nAllow: /\n\nUser-agent: CuadraBot\nDisallow: /`);
   assert.equal(isAllowed(own.rules, '/'), false);
 });
+
+test('Houzez sin operación en el título: la toma del estado publicado y del data-map', () => {
+  const html = `<html><head><title>33 Orientales 215 - Predial</title></head><body class="houzez property_status-venta">
+  <div id="houzez-single-listing-map" data-map='{"latitude":"-34.5729135","longitude":"-58.4555977","address":""}'></div>
+  <a href="https://inmo.test/estado/venta/" class="label-status">Compra</a><span class="item-price">USD 245.600</span></body></html>`;
+  const { via, listings: [l] } = extract('https://inmo.test/propiedad/10505118-2/', html, 'Inmo');
+  assert.equal(via, 'houzez');
+  assert.equal(l.op, 'venta');
+  assert.equal(l.lat, -34.5729135);
+});

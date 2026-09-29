@@ -38,6 +38,13 @@ export function guessOp(s) {
 }
 const TYPES = [['Monoambiente', /monoambiente/i], ['PH', /\bph\b/i], ['Departamento', /departamento|depto/i], ['Casa', /\bcasa\b/i],
   ['Local', /\blocal\b/i], ['Oficina', /oficina/i], ['Terreno', /terreno|lote/i], ['Cochera', /cochera/i], ['Galpón', /galp[oó]n/i]];
+// Operación publicada en la página: clases o links de estado de WordPress/Houzez
+// (property_status-venta, /status/venta/, /estado/alquiler/).
+export function pageOp(html) {
+  const m = html.match(/property_status-(venta|alquiler|sale|rent)\b/i) ||
+    html.match(/\/(?:status|estado)\/(venta|alquiler|en-venta|en-alquiler|for-sale|for-rent)\/?["']/i);
+  return m ? guessOp(m[1]) : null;
+}
 export const guessType = s => (TYPES.find(([, re]) => re.test(s)) ?? ['Propiedad'])[0];
 
 export function parsePrice(s) {
@@ -140,7 +147,7 @@ export function extractJsonLd(url, html, agent) {
       const f = finish({
         id: `${new URL(url).host}_${new URL(url).pathname}`,
         url, agent,
-        op: guessOp(`${name} ${url}`),
+        op: guessOp(`${name} ${url}`) ?? pageOp(html),
         type: guessType(`${name} ${url}`),
         lat: num(geo.latitude), lng: num(geo.longitude),
         address: text(addr.streetAddress) || name,
@@ -180,6 +187,10 @@ export function extractHouzez(url, html, agent) {
     }
   }
   if (lat === null) {
+    const dm = html.match(/houzez-single-listing-map"[^>]*data-map='(\{[^']*\})'/);
+    if (dm) { try { const d = JSON.parse(dm[1]); lat = num(d.latitude); lng = num(d.longitude); address = text(d.address); } catch {} }
+  }
+  if (lat === null) {
     const q = html.match(/maps\.google\.[a-z.]+\/?\?q=(-?\d+\.\d+),\s*(-?\d+\.\d+)/i);
     if (q) { lat = num(q[1]); lng = num(q[2]); }
   }
@@ -189,7 +200,7 @@ export function extractHouzez(url, html, agent) {
   return [finish({
     id: `${new URL(url).host}_${new URL(url).pathname}`,
     url, agent,
-    op: guessOp(`${b.title} ${url}`),
+    op: guessOp(`${b.title} ${url}`) ?? pageOp(html),
     type: guessType(`${o.property_type || ''} ${b.title}`),
     lat, lng,
     address: address || b.title,
@@ -210,7 +221,7 @@ export function extractDataAttrs(url, html, agent) {
   const { price, currency } = parsePrice(all);
   return [finish({
     id: `${new URL(url).host}_${new URL(url).pathname}`,
-    url, agent, op: guessOp(`${b.title} ${url}`), type: guessType(`${b.title} ${url}`),
+    url, agent, op: guessOp(`${b.title} ${url}`) ?? pageOp(html), type: guessType(`${b.title} ${url}`),
     lat: num(m[1]), lng: num(m[2]), address: b.title, price, currency,
     amb: guessAmb(all), m2: guessM2(all), desc: b.desc, photos: b.image ? [b.image] : [],
   })].filter(Boolean);
@@ -237,7 +248,7 @@ export function extractSinglePair(url, html, agent) {
   const { price, currency } = hv && num(hv[1]) ? { price: num(hv[1]), currency: /u/i.test(hm?.[1] ?? '') ? 'USD' : 'ARS' } : parsePrice(all);
   return [finish({
     id: `${new URL(url).host}_${new URL(url).pathname}${new URL(url).search}`,
-    url, agent, op: guessOp(`${b.title} ${h1} ${url}`), type: guessType(`${b.title} ${h1} ${url}`),
+    url, agent, op: guessOp(`${b.title} ${h1} ${url}`) ?? pageOp(html), type: guessType(`${b.title} ${h1} ${url}`),
     lat, lng, address: (h1 || b.title).split(/[—|-]/)[0].trim(), price, currency,
     amb: guessAmb(all), m2: guessM2(all), desc: b.desc, photos: b.image ? [b.image] : [],
   })].filter(Boolean);
