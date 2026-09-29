@@ -38,6 +38,13 @@ export function guessOp(s) {
 }
 const TYPES = [['Monoambiente', /monoambiente/i], ['PH', /\bph\b/i], ['Departamento', /departamento|depto/i], ['Casa', /\bcasa\b/i],
   ['Local', /\blocal\b/i], ['Oficina', /oficina/i], ['Terreno', /terreno|lote/i], ['Cochera', /cochera/i], ['Galpón', /galp[oó]n/i]];
+// Operación publicada en la página: clases o links de estado de WordPress/Houzez
+// (property_status-venta, /status/venta/, /estado/alquiler/).
+export function pageOp(html) {
+  const m = html.match(/property_status-(venta|alquiler|sale|rent)\b/i) ||
+    html.match(/\/(?:status|estado)\/(venta|alquiler|en-venta|en-alquiler|for-sale|for-rent)\/?["']/i);
+  return m ? guessOp(m[1]) : null;
+}
 export const guessType = s => (TYPES.find(([, re]) => re.test(s)) ?? ['Propiedad'])[0];
 
 export function parsePrice(s) {
@@ -140,7 +147,7 @@ export function extractJsonLd(url, html, agent) {
       const f = finish({
         id: `${new URL(url).host}_${new URL(url).pathname}`,
         url, agent,
-        op: guessOp(`${name} ${url}`),
+        op: guessOp(`${name} ${url}`) ?? pageOp(html),
         type: guessType(`${name} ${url}`),
         lat: num(geo.latitude), lng: num(geo.longitude),
         address: text(addr.streetAddress) || name,
@@ -180,6 +187,10 @@ export function extractHouzez(url, html, agent) {
     }
   }
   if (lat === null) {
+    const dm = html.match(/houzez-single-listing-map"[^>]*data-map='(\{[^']*\})'/);
+    if (dm) { try { const d = JSON.parse(dm[1]); lat = num(d.latitude); lng = num(d.longitude); address = text(d.address); } catch {} }
+  }
+  if (lat === null) {
     const q = html.match(/maps\.google\.[a-z.]+\/?\?q=(-?\d+\.\d+),\s*(-?\d+\.\d+)/i);
     if (q) { lat = num(q[1]); lng = num(q[2]); }
   }
@@ -189,7 +200,7 @@ export function extractHouzez(url, html, agent) {
   return [finish({
     id: `${new URL(url).host}_${new URL(url).pathname}`,
     url, agent,
-    op: guessOp(`${b.title} ${url}`),
+    op: guessOp(`${b.title} ${url}`) ?? pageOp(html),
     type: guessType(`${o.property_type || ''} ${b.title}`),
     lat, lng,
     address: address || b.title,
@@ -210,7 +221,7 @@ export function extractDataAttrs(url, html, agent) {
   const { price, currency } = parsePrice(all);
   return [finish({
     id: `${new URL(url).host}_${new URL(url).pathname}`,
-    url, agent, op: guessOp(`${b.title} ${url}`), type: guessType(`${b.title} ${url}`),
+    url, agent, op: guessOp(`${b.title} ${url}`) ?? pageOp(html), type: guessType(`${b.title} ${url}`),
     lat: num(m[1]), lng: num(m[2]), address: b.title, price, currency,
     amb: guessAmb(all), m2: guessM2(all), desc: b.desc, photos: b.image ? [b.image] : [],
   })].filter(Boolean);
@@ -237,18 +248,96 @@ export function extractSinglePair(url, html, agent) {
   const { price, currency } = hv && num(hv[1]) ? { price: num(hv[1]), currency: /u/i.test(hm?.[1] ?? '') ? 'USD' : 'ARS' } : parsePrice(all);
   return [finish({
     id: `${new URL(url).host}_${new URL(url).pathname}${new URL(url).search}`,
-    url, agent, op: guessOp(`${b.title} ${h1} ${url}`), type: guessType(`${b.title} ${h1} ${url}`),
+    url, agent, op: guessOp(`${b.title} ${h1} ${url}`) ?? pageOp(html), type: guessType(`${b.title} ${h1} ${url}`),
     lat, lng, address: (h1 || b.title).split(/[—|-]/)[0].trim(), price, currency,
     amb: guessAmb(all), m2: guessM2(all), desc: b.desc, photos: b.image ? [b.image] : [],
   })].filter(Boolean);
 }
 
+// ---------- 5b. Ficha de la plantilla web de Tokko (/p/ID-...) ----------
+// Título "Inmobiliaria - Departamento en Venta en Villa Crespo - Ferrari al 200",
+// ubicación en el setView del mapa y datos en los ítems "ficha_detalle_item".
+export function extractTokkoFicha(url, html, agent) {
+  if (!/tokkobroker/i.test(html) || !/\/p\/\d+/.test(url)) return [];
+  const c = html.match(/setView\(\[\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*\]/) || html.match(/L\.circle\(\[\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*\]/);
+  if (!c) return [];
+  const title = text((html.match(/<title>([\s\S]*?)<\/title>/i) || [])[1]);
+  const parts = title.split(' - ').map(p => p.trim());
+  const tipo = parts.find(p => /\ben\s+(venta|alquiler)/i.test(p)) || title;
+  const items = Object.fromEntries([...html.matchAll(/ficha_detalle_item"[^>]*>\s*<b>([^<]+)<\/b>\s*<br\s*\/?>\s*([^<]+)/g)].map(m => [text(m[1]).toLowerCase(), text(m[2])]));
+  const opClass = (html.match(/operation-type-div-(venta|alquiler)/i) || [])[1];
+  const val = text((html.match(/operation-val[^>]*>\s*<span>([^<]+)/) || [])[1]);
+  const { price, currency } = parsePrice(val.replace(/(USD|U\$S|\$)(\d)/i, '$1 $2'));
+  const id = (url.match(/\/p\/(\d+)/) || [])[1];
+  // Fotos de la propiedad: w_pics/<id>_... (evita logos e íconos de la plantilla).
+  const photo = (html.match(new RegExp(`https://static\\.tokkobroker\\.com/(?:w_pics|pictures)/${id}_[^"'\\s)]+`)) || [])[0];
+  return [finish({
+    id: `${new URL(url).host}_${id}`, url, agent,
+    op: opClass ? guessOp(opClass) : guessOp(tipo), temporario: /temporario/i.test(tipo), type: guessType(tipo),
+    lat: num(c[1]), lng: num(c[2]),
+    address: items['dirección'] || parts.at(-1) || tipo, zone: items['ubicación'] || '',
+    price, currency,
+    amb: num(items['ambientes']), dorm: num(items['dormitorios']), banos: num(items['baños']) ?? 0,
+    m2: num(items['superficie cubierta']), m2tot: num(items['total construido'] ?? items['superficie total']),
+    exp: num(items['expensas']) ?? 0, antig: num(items['antigüedad']),
+    desc: meta(html, 'og:description'), photos: photo ? [photo] : [],
+  })].filter(Boolean);
+}
+
 // Probamos del más confiable al menos confiable.
-export const EXTRACTORS = { tokko: extractTokko, jsonld: extractJsonLd, houzez: extractHouzez, data: extractDataAttrs, single: extractSinglePair };
+export const EXTRACTORS = { tokko: extractTokko, jsonld: extractJsonLd, houzez: extractHouzez, tokkoFicha: extractTokkoFicha, data: extractDataAttrs, single: extractSinglePair };
 export function extract(url, html, agent) {
   for (const [name, fn] of Object.entries(EXTRACTORS)) {
     const got = fn(url, html, agent);
     if (got.length) return { via: name, listings: got };
   }
   return { via: null, listings: [] };
+}
+
+// ---------- 6. Listado de la plantilla web de Tokko (sitios sin sitemap) ----------
+// La página /Propiedades trae un marcador por cada resultado (add_new_marker(id, lat, lng))
+// y las tarjetas de a 20; /Propiedades?o=2,2&p=N trae las tarjetas siguientes.
+// Cruzamos tarjetas y marcadores por ID: la ubicación es la misma que usa el mapa del sitio.
+export function tokkoWebMarkers(html) {
+  const out = new Map();
+  for (const m of html.matchAll(/add_new_marker\(\s*'(\d+)'\s*,\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*\)/g)) out.set(m[1], { lat: num(m[2]), lng: num(m[3]) });
+  return out;
+}
+export function tokkoWebCards(html, origin) {
+  const cards = [];
+  for (const chunk of html.split(/<li prop-id="/).slice(1)) {
+    const id = chunk.match(/^(\d+)"/)?.[1];
+    if (!id) continue;
+    const body = chunk.slice(0, chunk.indexOf('</li>') + 1 || undefined);
+    const pick = re => text((body.match(re) || [])[1]);
+    const href = (body.match(/href="(\/p\/[^"]+)"/) || [])[1];
+    const tipo = pick(/class="prop-desc-tipo-ub">([\s\S]*?)<\/div>/);          // "Departamento en Venta en Villa Crespo, Capital Federal"
+    const dir = pick(/class="prop-desc-dir">([\s\S]*?)<\/div>/);               // "Warnes 55"
+    const valor = pick(/class="prop-valor-nro"[^>]*>([\s\S]*?)<div/);          // "USD148.000"
+    cards.push({
+      id, tipo, dir, valor,
+      url: href ? new URL(href, origin).href : null,
+      m2: num(pick(/class="prop-data"><div>([\d.,]+)\s*m/)),
+      amb: num(pick(/class="prop-data2"><div>(\d+)</)),
+      photo: (body.match(/class="dest-img" src="([^"]+)"/) || [])[1] ?? null,
+    });
+  }
+  return cards;
+}
+export function tokkoWebListings(cards, markers, agent, host) {
+  const out = [];
+  for (const c of cards) {
+    const pos = markers.get(c.id);
+    if (!pos || !c.url) continue;
+    const { price, currency } = parsePrice(c.valor.replace(/(USD|U\$S|\$)(\d)/i, '$1 $2'));
+    const zone = (c.tipo.match(/\ben\s+(?:venta|alquiler(?: temporario)?)\s+en\s+([^,]+)/i) || [])[1] ?? '';
+    const f = finish({
+      id: `${host}_${c.id}`, url: c.url, agent,
+      op: guessOp(c.tipo), temporario: /temporario/i.test(c.tipo), type: guessType(c.tipo),
+      lat: pos.lat, lng: pos.lng, address: c.dir || c.tipo, zone,
+      price, currency, amb: c.amb, m2: c.m2, desc: '', photos: c.photo ? [c.photo] : [],
+    });
+    if (f) out.push(f);
+  }
+  return out;
 }

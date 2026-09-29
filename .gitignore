@@ -5,3 +5,5 @@ deno.lock
 .omc
 .claude
 .superpowers
+data/
+public/data/

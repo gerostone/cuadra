@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { extract, extractSinglePair, parsePrice, guessOp, guessType } from '../crawler/extract.mjs';
+import { extract, extractSinglePair, parsePrice, guessOp, guessType, tokkoWebMarkers, tokkoWebCards, tokkoWebListings } from '../crawler/extract.mjs';
 import { parseRobots, isAllowed } from '../crawler/robots.mjs';
 
 // Fichas mínimas armadas a mano con la misma estructura que cada plataforma.
@@ -90,4 +90,50 @@ test('robots.txt: prioriza el grupo de CuadraBot y la regla más específica', (
   assert.deepEqual(sitemaps, ['https://inmo.test/sitemap.xml']);
   const own = parseRobots(`User-agent: *\nAllow: /\n\nUser-agent: CuadraBot\nDisallow: /`);
   assert.equal(isAllowed(own.rules, '/'), false);
+});
+
+test('Houzez sin operación en el título: la toma del estado publicado y del data-map', () => {
+  const html = `<html><head><title>33 Orientales 215 - Predial</title></head><body class="houzez property_status-venta">
+  <div id="houzez-single-listing-map" data-map='{"latitude":"-34.5729135","longitude":"-58.4555977","address":""}'></div>
+  <a href="https://inmo.test/estado/venta/" class="label-status">Compra</a><span class="item-price">USD 245.600</span></body></html>`;
+  const { via, listings: [l] } = extract('https://inmo.test/propiedad/10505118-2/', html, 'Inmo');
+  assert.equal(via, 'houzez');
+  assert.equal(l.op, 'venta');
+  assert.equal(l.lat, -34.5729135);
+});
+
+test('plantilla web de Tokko: cruza tarjetas del listado con los marcadores del mapa', () => {
+  const html = `<script>function load_markers(){ add_new_marker('8565374', -34.603976100000000, -58.438102200000010);
+    add_new_marker('999', -34.61, -58.40); }</script>
+  <ul id="propiedades"><li prop-id="8565374"><a href="/p/8565374-Departamento-en-Venta-en-Villa-Crespo-Warnes--55-">
+  <div class="prop-data"><div>68.10 m²</div></div><div class="prop-data2"><div>3</div></div>
+  <img class="dest-img" src="https://static.tokkobroker.com/w_pics/8565374_x.jpg" alt=""/>
+  <div class="prop-desc"><div class="prop-desc-tipo-ub">Departamento en Venta en Villa Crespo, Capital Federal</div><div class="prop-desc-dir">Warnes 55 </div></div></a>
+  <div class="prop-valor-nro" onClick="x()"> USD148.000 <div class='codref'>VAP8565374</div></div></li>
+  <li prop-id="777"><a href="/p/777-Casa-en-Alquiler"><div class="prop-desc-tipo-ub">Casa en Alquiler en Palermo</div></a></li></ul>`;
+  const markers = tokkoWebMarkers(html);
+  assert.equal(markers.size, 2);
+  const cards = tokkoWebCards(html, 'https://inmo.test');
+  assert.equal(cards.length, 2);
+  const out = tokkoWebListings(cards, markers, 'Inmo', 'inmo.test');
+  assert.equal(out.length, 1, 'la tarjeta sin marcador se descarta');
+  const [l] = out;
+  assert.deepEqual([l.op, l.type, l.price, l.currency, l.amb, l.m2, l.address, l.zone], ['venta', 'Departamento', 148000, 'USD', 3, 68.1, 'Warnes 55', 'Villa Crespo']);
+  assert.equal(l.lat, -34.6039761);
+  assert.equal(l.url, 'https://inmo.test/p/8565374-Departamento-en-Venta-en-Villa-Crespo-Warnes--55-');
+});
+
+test('ficha de la plantilla web de Tokko: ubicación del mapa y datos de los ítems', () => {
+  const html = `<html><head><title>Lipovich  - Departamento en Venta en Villa Crespo - Ferrari al 200</title>
+  <link href="https://static.tokkobroker.com/tfw/css/x.css"></head><body>
+  <img src="https://static.tokkobroker.com/w_pics/9571354_abc.jpg">
+  <div class='operation-type-div operation-type-div-venta'>VENTA</div><div class='operation-val op-venta'> <span>USD220.000</span></div>
+  <div class="ficha_detalle_item"><b>Dirección</b><br/>Ferrari al 200</div><div class="ficha_detalle_item"><b>Ubicación</b><br/>Villa Crespo</div>
+  <div class="ficha_detalle_item"><b>Superficie cubierta</b><br/>115 m²</div><div class="ficha_detalle_item"><b>Ambientes</b><br/>4</div>
+  <script>var map = L.map(document.getElementById("openstreetmap_box")).setView([-34.6019755, -58.4437046], 15);</script></body></html>`;
+  const { via, listings: [l] } = extract('https://inmo.test/p/9571354-Departamento-en-Venta', html, 'Lipovich');
+  assert.equal(via, 'tokkoFicha');
+  assert.deepEqual([l.op, l.type, l.price, l.currency, l.amb, l.m2, l.address, l.zone], ['venta', 'Departamento', 220000, 'USD', 4, 115, 'Ferrari al 200', 'Villa Crespo']);
+  assert.equal(l.lat, -34.6019755);
+  assert.deepEqual(l.photos, ['https://static.tokkobroker.com/w_pics/9571354_abc.jpg']);
 });
