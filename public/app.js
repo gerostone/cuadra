@@ -1,4 +1,4 @@
-import { RADIUS, NEAR, dist, fmtM, walkMin, esc, shortPrice, fullPrice, expLabel, perM2, passes, priceAmount, priceSuffix, listingSummary, opLabel, signLabel, activeFilterCount, sourceLabel } from './ui.js';
+import { RADIUS, NEAR, dist, fmtM, walkMin, esc, shortPrice, fullPrice, expLabel, perM2, passes, priceAmount, priceSuffix, listingSummary, opLabel, signLabel, activeFilterCount, sourceLabel, presentFacts, featureList, normalizeCaps } from './ui.js';
 import { CELL, listingsInCell, drawFacade } from './demo.js';
 
 // ---------- Utilidades ----------
@@ -7,7 +7,6 @@ const store = {
   get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
-const dash = v => v ? v : '—';
 
 // ---------- Fuente de avisos: /data/listings.json (lo genera el crawler), o ejemplos si está vacío ----------
 const remote = { mode: 'pending', listings: [], agencies: 0 };
@@ -123,7 +122,7 @@ function render() {
     let mk = markers.get(p.id);
     if (!mk) {
       mk = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: cls, html: `<div>${shortPrice(p)}</div>`, iconSize: [0, 0] }), keyboard: true, title: `${p.type} en ${p.op}, ${p.address}` });
-      mk.on('click', () => { select(p.id, true); openSheet(p); });
+      mk.on('click', () => { select(p.id); openSheet(p); });
       mk.addTo(layer); markers.set(p.id, mk);
     } else if (mk.cls !== cls) {
       mk.setIcon(L.divIcon({ className: cls, html: `<div>${shortPrice(p)}</div>`, iconSize: [0, 0] }));
@@ -178,7 +177,7 @@ function cardEl(p, d) {
       <span class="card-meta">${esc(listingSummary(p))} · <span data-d>${fmtM(d)} · ${walkMin(d)} min</span></span>
       <span class="card-addr">${state.favs.has(p.id) ? '♥ ' : ''}${esc(p.address)}</span>
     </span><span class="card-go" aria-hidden="true">Ver</span>`;
-  b.onclick = () => { select(p.id, true); openSheet(p); };
+  b.onclick = () => { select(p.id); openSheet(p); };
   return b;
 }
 function trailLength() { const ll = trail.getLatLngs(); let s = 0; for (let i = 1; i < ll.length; i++) s += dist(ll[i - 1], ll[i]); return s; }
@@ -188,12 +187,9 @@ function renderStatus() {
   $('#status').textContent = state.walking ? `Modo paseo · ${fmtM(trailLength())}`
     : live ? `En vivo · ${fmtM(trailLength())}` : 'Palermo · aproximada';
 }
-function select(id, pan) {
+function select(id) {
   state.sel = id; render();
-  const card = document.querySelector(`.card[data-id="${id}"]`);
-  card?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-  const p = byId.get(id);
-  if (pan && p) { state.follow = false; map.panTo([p.lat, p.lng]); }
+  document.querySelector(`.card[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 // ---------- Diálogos (hoja de filtros y ficha) ----------
@@ -212,7 +208,13 @@ function closeDialog(restore = true) {
   const { el, back } = openDlg; openDlg = null;
   el.hidden = true; $('#scrim').hidden = true;
   setDock('peek');
-  if (restore && back?.isConnected) back.focus();
+  if (restore) focusBack(back, el.dataset.id);
+}
+// La lista se vuelve a dibujar al seleccionar o guardar, así que el botón que abrió la ficha puede ya no existir:
+// en ese caso el foco vuelve a la tarjeta nueva de la misma propiedad.
+function focusBack(back, id) {
+  const el = back?.isConnected && back !== document.body ? back : id && document.querySelector(`.card[data-id="${CSS.escape(id)}"]`);
+  el?.focus();
 }
 addEventListener('keydown', e => {
   if (!openDlg) return;
@@ -281,49 +283,73 @@ setDock('peek');
 function openSheet(p) {
   state.seen.add(p.id); store.set('cuadra.seen', [...state.seen]);
   const d = state.pos ? dist(state.pos, p) : 0;
-  const fav = state.favs.has(p.id);
+  const fav = state.favs.has(p.id), facts = presentFacts(p), feats = featureList(p), m2 = perM2(p);
+  const contact = p.source === 'demo' ? 'Aviso de ejemplo generado para esta demo'
+    : [p.phone, p.email].filter(Boolean).map(c => `<span class="contact">${esc(c)}</span>`).join(' · ')
+      + (p.alsoBy?.length ? `<br>También la publica: ${p.alsoBy.map(esc).join(', ')}` : '');
   const sh = $('#sheet');
   sh.dataset.id = p.id;
-  sh.innerHTML = `
-    <div class="hero">${p.photos?.length ? `<img src="${esc(p.photos[0])}" alt="Foto de ${esc(p.address)}">` : '<canvas></canvas>'}<button class="close" aria-label="Cerrar">×</button>
-      <div class="sign tag ${p.op}">${p.op === 'venta' ? 'Vende' : 'Alquila'}</div></div>
-    <div class="inner">
-      <div><h2>${fullPrice(p)}</h2>
-        <div class="exp">${expLabel(p, ' de expensas')}${perM2(p) ? ` · ${perM2(p)}` : ''}</div></div>
-      <div><div class="where">${esc(p.address)}${p.piso ? ', ' + esc(p.piso) : ''}</div>
-        <div class="exp">${esc(p.type)}${p.zone ? ' en ' + esc(p.zone) : ''} · a ${fmtM(d)} de vos, ${walkMin(d)} min caminando${p.days != null ? ` · publicado hace ${p.days} ${p.days === 1 ? 'día' : 'días'}` : ''}</div></div>
-      <div class="facts">
-        <div><b>${dash(p.amb)}</b><span>Amb.</span></div>
-        <div><b>${dash(p.m2)}</b><span>m² cub.</span></div>
-        <div><b>${dash(p.m2tot)}</b><span>m² tot.</span></div>
-        <div><b>${p.antig === 0 ? 'Nuevo' : dash(p.antig)}</b><span>${p.antig === 0 ? 'A estrenar' : 'Años'}</span></div>
+  sh.setAttribute('aria-label', `${p.type} en ${opLabel(p)}, ${p.address}`);
+  sh.innerHTML = `<div class="sheet-scroll">
+      <div class="hero">${p.photos?.length ? `<img src="${esc(p.photos[0])}" alt="Foto de ${esc(p.address)}">` : '<canvas></canvas>'}
+        <span class="grab" aria-hidden="true"></span>
+        <button type="button" class="back" data-close data-autofocus>← Volver</button>
+        <button type="button" class="icon-btn close" data-close data-autofocus aria-label="Cerrar">×</button>
+        <span class="sign tag ${p.op}">${signLabel(p)}</span></div>
+      <div class="inner">
+        <div><p class="det-price">${esc(priceAmount(p))}<small>${priceSuffix(p)}</small></p>
+          <p class="det-sub">${expLabel(p, ' de expensas')}${m2 ? ` · ${m2}` : ''}${p.days != null ? ` · publicado hace ${p.days} ${p.days === 1 ? 'día' : 'días'}` : ''}</p></div>
+        <div><p class="det-where">${esc(p.address)}${p.piso ? ', ' + esc(p.piso) : ''}</p>
+          <p class="det-sub">${esc(p.type)}${p.zone ? ' en ' + esc(p.zone) : ''} · a ${fmtM(d)}, ${walkMin(d)} min caminando</p></div>
+        ${facts.length ? `<div class="facts">${facts.map(f => `<div><b>${esc(f.value)}</b>${esc(f.label)}</div>`).join('')}</div>` : ''}
+        ${feats.length ? `<div class="feats">${feats.map(f => `<span>${esc(f)}</span>`).join('')}</div>` : ''}
+        ${p.desc ? `<div><p class="desc">${esc(normalizeCaps(p.desc))}</p><button type="button" class="more" hidden>Leer más</button></div>` : ''}
+        <div class="agent"><b>${esc(p.agent)}</b>${contact}</div>
       </div>
-      <div class="feats">${[...new Set([...(p.feats || []), ...(p.mascotas ? ['Acepta mascotas'] : []), ...(p.credito ? ['Apto crédito'] : [])])].map(f => `<span>${esc(f)}</span>`).join('')}${p.banos ? `<span>${p.banos} ${p.banos > 1 ? 'baños' : 'baño'}</span>` : ''}</div>
-      ${p.desc ? `<p class="desc">${esc(p.desc)}</p>` : ''}
-      <div class="agent"><div><b>${esc(p.agent)}</b>${p.source === 'demo' ? 'Aviso de ejemplo generado para esta demo'
-        : [p.phone, p.email].filter(Boolean).map(c => `<span class="contact">${esc(c)}</span>`).join(' · ')
-          + (p.alsoBy?.length ? `<br>También la publica: ${p.alsoBy.map(esc).join(', ')}` : '')}</div></div>
-      <div class="actions">
-        <button class="btn ghost" id="favBtn">${fav ? '♥ Guardada' : '♡ Guardar'}</button>
-        ${p.url ? `<a class="btn ghost" style="text-align:center;text-decoration:none" target="_blank" rel="noopener" href="${esc(p.url)}">Ver aviso</a>` : ''}
-        <a class="btn" style="text-align:center;text-decoration:none" target="_blank" rel="noopener"
-           href="https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${p.lat.toFixed(6)},${p.lng.toFixed(6)}">Cómo llegar</a>
-      </div>
+    </div>
+    <div class="actbar">
+      <button type="button" class="btn ghost save" id="favBtn" aria-pressed="${fav}" aria-label="Guardar">${fav ? '♥' : '♡'}</button>
+      ${p.url ? `<a class="btn ghost" target="_blank" rel="noopener" href="${esc(p.url)}">Ver aviso</a>` : ''}
+      <a class="btn main" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${p.lat.toFixed(6)},${p.lng.toFixed(6)}">Cómo llegar</a>
     </div>`;
-  sh.hidden = false; $('#sheetBg').hidden = false;
-  requestAnimationFrame(() => { const cv = sh.querySelector('canvas'); if (cv) drawFacade(cv, p); });
-  sh.querySelector('.close').onclick = closeSheet;
+  openDialog(sh, { soft: true });
+  requestAnimationFrame(() => {
+    const cv = sh.querySelector('.hero canvas'); if (cv) drawFacade(cv, p);
+    const desc = sh.querySelector('.desc');
+    if (desc && desc.scrollHeight > desc.clientHeight + 2) sh.querySelector('.more').hidden = false;
+  });
+  sh.querySelector('.more')?.addEventListener('click', e => {
+    const open = sh.querySelector('.desc').classList.toggle('open');
+    e.currentTarget.textContent = open ? 'Leer menos' : 'Leer más';
+  });
   sh.querySelector('#favBtn').onclick = e => {
     if (state.favs.has(p.id)) state.favs.delete(p.id); else state.favs.add(p.id);
     store.set('cuadra.favs', [...state.favs]);
-    e.target.textContent = state.favs.has(p.id) ? '♥ Guardada' : '♡ Guardar';
+    const on = state.favs.has(p.id);
+    e.currentTarget.textContent = on ? '♥' : '♡'; e.currentTarget.setAttribute('aria-pressed', on);
     render();
   };
-  sh.querySelector('.close').focus();
+  sheetGesture(sh);
+  focusPin(p);
 }
-function closeSheet() { $('#sheet').hidden = true; $('#sheetBg').hidden = true; }
-$('#sheetBg').onclick = closeSheet;
-addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+// Arrastrar la foto hacia abajo cierra la ficha.
+function sheetGesture(sh) {
+  const hero = sh.querySelector('.hero');
+  let y0 = null, dy = 0;
+  hero.addEventListener('pointerdown', e => {
+    if (e.target.closest('button') || !openDlg?.modal) return;
+    y0 = e.clientY; dy = 0; hero.setPointerCapture(e.pointerId); sh.classList.add('dragging');
+  });
+  hero.addEventListener('pointermove', e => { if (y0 == null) return; dy = Math.max(0, e.clientY - y0); sh.style.transform = `translateY(${dy}px)`; });
+  const end = () => { if (y0 == null) return; y0 = null; sh.classList.remove('dragging'); sh.style.transform = ''; if (dy > 80) closeDialog(); };
+  hero.addEventListener('pointerup', end); hero.addEventListener('pointercancel', end);
+}
+// Centra el pin en la franja de mapa que queda visible arriba de la ficha.
+function focusPin(p) {
+  state.follow = false;
+  const target = map.project([p.lat, p.lng]).add([0, map.getSize().y / 2 - 75]);
+  map.panTo(map.unproject(target), { animate: true });
+}
 
 // Si una foto no carga, mostramos la fachada ilustrada.
 document.addEventListener('error', e => {
@@ -364,7 +390,7 @@ function passingAlert(p, d) {
   let y0 = null, swiped = false;
   el.addEventListener('pointerdown', e => { y0 = e.clientY; swiped = false; });
   el.addEventListener('pointerup', e => { if (y0 != null && e.clientY - y0 < -30) { swiped = true; hideAlert(); } y0 = null; });
-  el.onclick = () => { if (swiped) return; hideAlert(); select(p.id, true); openSheet(p); };
+  el.onclick = () => { if (swiped) return; hideAlert(); select(p.id); openSheet(p); };
   showAlert(el, 8000);
   if (navigator.vibrate) try { navigator.vibrate(60); } catch {}
 }
