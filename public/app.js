@@ -147,6 +147,7 @@ function renderDock(inRadius) {
   const n = inRadius.length;
   $('#count').textContent = n;
   $('#countLabel').innerHTML = `cerca tuyo<br>a 5 cuadras · ${sourceLabel(remote.mode, remote.agencies)}`;
+  $('#filtersApply').textContent = n === 1 ? 'Ver 1 propiedad' : `Ver ${n} propiedades`;
   const top = inRadius.slice(0, 24);
   $('#empty').hidden = top.length > 0;
   if (!top.length) {
@@ -194,6 +195,40 @@ function select(id, pan) {
   const p = byId.get(id);
   if (pan && p) { state.follow = false; map.panTo([p.lat, p.lng]); }
 }
+
+// ---------- Diálogos (hoja de filtros y ficha) ----------
+let openDlg = null;
+function openDialog(el, { soft = false } = {}) {
+  closeDialog(false);
+  openDlg = { el, back: document.activeElement, modal: true };
+  el.hidden = false;
+  $('#scrim').hidden = false; $('#scrim').classList.toggle('soft', soft);
+  setDock('hidden');
+  const first = [...el.querySelectorAll('[data-autofocus]')].find(x => x.offsetParent !== null) || el.querySelector('button, a[href]');
+  first?.focus();
+}
+function closeDialog(restore = true) {
+  if (!openDlg) return;
+  const { el, back } = openDlg; openDlg = null;
+  el.hidden = true; $('#scrim').hidden = true;
+  setDock('peek');
+  if (restore && back?.isConnected) back.focus();
+}
+addEventListener('keydown', e => {
+  if (!openDlg) return;
+  if (e.key === 'Escape') { e.preventDefault(); closeDialog(); return; }
+  if (e.key !== 'Tab' || !openDlg.modal) return;
+  const f = [...openDlg.el.querySelectorAll('button, a[href], [tabindex]:not([tabindex="-1"])')].filter(x => !x.disabled && x.offsetParent !== null);
+  if (!f.length) return;
+  const first = f[0], last = f[f.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
+document.addEventListener('click', e => { if (openDlg && e.target.closest('[data-close]')) closeDialog(); });
+$('#scrim').onclick = () => closeDialog();
+$('#filtersBtn').onclick = () => openDialog($('#filtersSheet'));
+$('#filtersApply').onclick = () => closeDialog();
+$('#filtersClear').onclick = () => clearFilters(false);
 
 // ---------- Panel inferior ----------
 // Tres estados: peek (la más cercana), expanded (lista completa) y hidden (con una hoja abierta).

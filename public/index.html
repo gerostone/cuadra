@@ -14,18 +14,6 @@
 
 <header class="top">
   <div class="pill"><i class="mark" aria-hidden="true"></i><b>Cuadra</b><span class="live" id="liveDot" hidden></span><span id="status">Buscando tu ubicación…</span></div>
-  <div class="filters" role="toolbar" aria-label="Filtros">
-    <div class="seg" id="ambSeg" aria-label="Ambientes">
-      <button data-amb="0" aria-pressed="true">Amb.</button>
-      <button data-amb="1" aria-pressed="false">1</button>
-      <button data-amb="2" aria-pressed="false">2</button>
-      <button data-amb="3" aria-pressed="false">3</button>
-      <button data-amb="4" aria-pressed="false">4+</button>
-    </div>
-    <button class="chip" data-flag="fav" aria-pressed="false">♥ Guardadas</button>
-    <button class="chip" data-flag="pets" aria-pressed="false">Acepta mascotas</button>
-    <button class="chip" data-flag="cred" aria-pressed="false">Apto crédito</button>
-  </div>
 </header>
 
 <div class="fabs">
@@ -41,7 +29,7 @@
   <button class="dock-grab" id="dockGrab" type="button" aria-expanded="false" aria-controls="dockList" aria-label="Ver la lista completa"><span></span></button>
   <div class="dock-head">
     <p class="dock-count"><b id="count">–</b><span id="countLabel">Buscando tu ubicación…</span></p>
-    <button class="dock-filters" id="filtersBtn" type="button" hidden>Filtros<i id="filtersBadge" hidden>0</i></button>
+    <button class="dock-filters" id="filtersBtn" type="button">Filtros<i id="filtersBadge" hidden>0</i></button>
   </div>
   <div class="dock-list" id="dockList">
     <div class="cards" id="cards">
@@ -54,6 +42,25 @@
     <button type="button" data-op="venta" aria-pressed="false">Venta</button>
     <button type="button" data-op="alquiler" aria-pressed="false">Alquiler</button>
   </div>
+</section>
+<div class="scrim" id="scrim" hidden></div>
+<section class="fsheet" id="filtersSheet" role="dialog" aria-modal="true" aria-labelledby="filtersTitle" hidden>
+  <header class="fsheet-head"><h2 id="filtersTitle">Filtros</h2><button type="button" class="icon-btn" data-close data-autofocus aria-label="Cerrar filtros">×</button></header>
+  <fieldset class="fgroup"><legend>Ambientes</legend>
+    <div class="seg light">
+      <button type="button" data-amb="0" aria-pressed="true">Todos</button>
+      <button type="button" data-amb="1" aria-pressed="false">1</button>
+      <button type="button" data-amb="2" aria-pressed="false">2</button>
+      <button type="button" data-amb="3" aria-pressed="false">3</button>
+      <button type="button" data-amb="4" aria-pressed="false">4+</button>
+    </div>
+  </fieldset>
+  <fieldset class="fgroup"><legend>Mostrar solo</legend>
+    <button type="button" class="toggle" data-flag="fav" aria-pressed="false"><span>Guardadas</span><i aria-hidden="true"></i></button>
+    <button type="button" class="toggle" data-flag="pets" aria-pressed="false"><span>Acepta mascotas</span><i aria-hidden="true"></i></button>
+    <button type="button" class="toggle" data-flag="cred" aria-pressed="false"><span>Apto crédito</span><i aria-hidden="true"></i></button>
+  </fieldset>
+  <footer class="fsheet-foot"><button type="button" class="btn ghost" id="filtersClear">Limpiar</button><button type="button" class="btn" id="filtersApply">Ver propiedades</button></footer>
 </section>
 
 <div id="alertWrap" aria-live="polite"></div>

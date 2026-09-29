@@ -51,16 +51,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .mark { flex: none; width: 9px; height: 20px; border-radius: 2px; background: linear-gradient(var(--venta) 50%, var(--alquiler) 50%); }
 .live { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #1f9d55; }
 .has-alert .pill { visibility: hidden; }
-.filters { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; }
-.filters::-webkit-scrollbar { display: none; }
-.filters .seg { display: flex; background: var(--surface); border-radius: 999px; box-shadow: var(--shadow); padding: 3px; flex: none; }
-.filters .seg button { border: 0; background: none; padding: 7px 14px; border-radius: 999px; font-weight: 600; font-size: 13px; white-space: nowrap; }
-.filters .seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
-.chip {
-  flex: none; border: 0; background: var(--surface); box-shadow: var(--shadow); border-radius: 999px;
-  padding: 8px 14px; font-weight: 600; font-size: 13px; white-space: nowrap;
-}
-.chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
 
 /* ---------- Botones flotantes ---------- */
 .fabs { position: fixed; right: 12px; z-index: 10; display: flex; flex-direction: column; gap: 10px; bottom: calc(env(safe-area-inset-bottom, 0px) + var(--dock-h, 220px) + 24px); transition: bottom .22s; }
@@ -152,8 +142,6 @@ body[data-dock="expanded"] .fabs, body[data-dock="hidden"] .fabs { display: none
 .agent { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid var(--line); padding-top: 14px; font-size: 13px; color: var(--muted); }
 .agent b { color: var(--fg); display: block; font-size: 14px; }
 .actions { display: flex; gap: 10px; }
-.btn { flex: 1; border: 0; border-radius: 10px; padding: 13px; font-weight: 700; font-size: 15px; background: var(--fg); color: var(--bg); }
-.btn.ghost { background: transparent; border: 2px solid var(--fg); color: var(--fg); }
 
 /* ---------- Aviso (estás pasando / mensajes) ---------- */
 #alertWrap { position: fixed; z-index: 20; top: calc(env(safe-area-inset-top, 0px) + 10px); left: 10px; right: 10px; max-width: 560px; margin: 0 auto; pointer-events: none; }
@@ -198,3 +186,33 @@ body[data-dock="expanded"] .fabs, body[data-dock="hidden"] .fabs { display: none
 .leaflet-bottom.leaflet-right { bottom: calc(env(safe-area-inset-bottom, 0px) + var(--dock-h, 220px) + 14px); }
 .leaflet-control-zoom { display: none; }
 
+/* ---------- Botones ---------- */
+.btn {
+  flex: 1; min-height: 50px; border: 0; border-radius: 14px; padding: 0 16px; font-weight: 800; font-size: 15px;
+  background: var(--fg); color: var(--bg); display: grid; place-items: center; text-align: center; text-decoration: none;
+}
+.btn.ghost { background: transparent; border: 2px solid var(--fg); color: var(--fg); }
+.icon-btn { flex: none; width: 44px; height: 44px; border: 0; border-radius: 12px; background: var(--bg); color: var(--fg); font-size: 22px; line-height: 1; display: grid; place-items: center; }
+
+/* ---------- Hoja de filtros ---------- */
+.scrim { position: fixed; inset: 0; z-index: 30; background: rgba(10, 14, 16, .45); animation: fade .2s; }
+.scrim.soft { background: rgba(10, 14, 16, .18); }
+@keyframes fade { from { opacity: 0; } }
+.fsheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 31; max-width: 560px; max-height: 90dvh; overflow-y: auto; margin: 0 auto;
+  background: var(--surface); color: var(--fg); border-radius: 24px 24px 0 0; box-shadow: var(--shadow);
+  padding: 10px 16px calc(env(safe-area-inset-bottom, 0px) + 16px); animation: up .28s cubic-bezier(.2,.8,.2,1);
+}
+.fsheet-head { display: flex; align-items: center; justify-content: space-between; }
+.fsheet-head h2 { margin: 0; font: 800 28px/1 var(--display); letter-spacing: .02em; text-transform: uppercase; }
+.fgroup { border: 0; margin: 16px 0 0; padding: 0; min-width: 0; }
+.fgroup legend { padding: 0; margin-bottom: 8px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.seg.light { display: flex; gap: 6px; }
+.seg.light button { flex: 1; min-height: 44px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-weight: 700; }
+.seg.light button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.toggle { width: 100%; min-height: 52px; padding: 0 2px; display: flex; align-items: center; justify-content: space-between; border: 0; border-bottom: 1px solid var(--line); background: none; font-size: 15px; font-weight: 600; text-align: left; }
+.toggle i { position: relative; flex: none; width: 44px; height: 26px; border-radius: 13px; background: var(--line); transition: background .15s; }
+.toggle i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .15s; }
+.toggle[aria-pressed="true"] i { background: var(--fg); }
+.toggle[aria-pressed="true"] i::after { transform: translateX(18px); }
+.fsheet-foot { display: flex; gap: 10px; margin-top: 20px; }
