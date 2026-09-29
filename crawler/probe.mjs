@@ -33,6 +33,15 @@ async function probe(host) {
         const markers = tokkoWebMarkers(list.text);
         const listings = tokkoWebListings(tokkoWebCards(list.text, origin), markers, host, new URL(origin).host);
         if (markers.size) return { ...row, tipo: 'tokko-web', marcadores: markers.size, primeraPagina: listings.length, ejemplo: listings[0] && { op: listings[0].op, price: listings[0].price, address: listings[0].address }, result: listings.length ? 'sirve (tokko-web)' : 'marcadores sin tarjetas' };
+        // Sin marcadores: probamos una ficha /p/ID del listado.
+        const link = (list.text.match(/href="(\/p\/\d+[^"]*)"/) || [])[1];
+        if (link) {
+          const u = new URL(link, origin).href;
+          const f = await get(u);
+          const { via, listings: [l] } = extract(u, f.text, host);
+          return { ...row, tipo: 'tokko-web', marcadores: 0, fichasEnPagina1: new Set([...list.text.matchAll(/href="\/p\/(\d+)/g)].map(m => m[1])).size,
+            ejemplo: l && { via, op: l.op, price: l.price, address: l.address, zone: l.zone, lat: l.lat }, result: l ? 'sirve (tokko-web, por fichas)' : 'no pude extraer la ficha' };
+        }
       }
       return { ...row, result: found ? 'sitemap sin fichas reconocibles' : 'sin sitemap' };
     }

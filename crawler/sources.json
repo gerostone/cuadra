@@ -76,5 +76,11 @@
     "name": "Inmobiliaria Imar",
     "site": "https://www.inmobiliariaimar.com.ar",
     "type": "tokko-web"
+  },
+  {
+    "id": "allo",
+    "name": "Allo Propiedades",
+    "site": "https://www.allopropiedades.com.ar",
+    "type": "tokko-web"
   }
 ]
