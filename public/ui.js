@@ -43,7 +43,8 @@ export const activeFilterCount = f => (f.amb ? 1 : 0) + (f.fav ? 1 : 0) + (f.pet
 
 // ---------- Ficha ----------
 // Muchas inmobiliarias publican todo en mayúsculas: si más del 60 % de las letras lo están, lo pasamos a oraciones.
-const ACRONYMS = /\b(ph|sum|caba|usd)\b/g;
+// Límites Unicode: \b solo conoce letras ASCII, así que en "cabañas" la ñ contaría como fin de palabra.
+const ACRONYMS = /(?<![\p{L}\p{N}])(ph|sum|caba|usd)(?![\p{L}\p{N}])/gu;
 export function normalizeCaps(text) {
   const s = String(text ?? '');
   const letters = s.match(/\p{L}/gu) || [];

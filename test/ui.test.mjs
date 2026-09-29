@@ -93,6 +93,11 @@ test('normalizeCaps pasa las descripciones en mayúsculas a oraciones', () => {
   assert.equal(normalizeCaps('LINDO.\nMUY LUMINOSO'), 'Lindo.\nMuy luminoso');
 });
 
+test('normalizeCaps no confunde siglas con el comienzo de palabras con acentos o eñe', () => {
+  assert.equal(normalizeCaps('VENDO CABAÑAS EN CABA. ALQUILO PH.'), 'Vendo cabañas en CABA. Alquilo PH.');
+  assert.equal(normalizeCaps('CASA CON PHÓTOS'), 'Casa con phótos');
+});
+
 test('normalizeCaps no toca textos con mayúsculas normales', () => {
   assert.equal(normalizeCaps('Luminoso PH con TERRAZA propia'), 'Luminoso PH con TERRAZA propia');
   assert.equal(normalizeCaps('Hola'), 'Hola');

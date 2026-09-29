@@ -201,10 +201,10 @@ function placeLayout() {
   // Venta/alquiler va arriba de la lista en escritorio y abajo en el teléfono: lo movemos para que el orden de Tab siga al visual.
   if (desktop.matches) {
     $('#dockList').before($('#opSeg'), fs); $('#dock').append(sh);
-    fs.hidden = false; fs.setAttribute('role', 'group'); fs.removeAttribute('aria-modal');
+    fs.hidden = false; fs.setAttribute('role', 'group'); fs.removeAttribute('aria-modal'); sh.removeAttribute('aria-modal');
   } else {
     $('#dockList').after($('#opSeg')); document.body.append(fs, sh);
-    fs.hidden = true; fs.setAttribute('role', 'dialog'); fs.setAttribute('aria-modal', 'true');
+    fs.hidden = true; fs.setAttribute('role', 'dialog'); fs.setAttribute('aria-modal', 'true'); sh.setAttribute('aria-modal', 'true');
   }
   setDock(desktop.matches ? 'expanded' : 'peek');
 }
@@ -212,7 +212,7 @@ let openDlg = null;
 function openDialog(el, { soft = false } = {}) {
   closeDialog(false);
   const inPanel = desktop.matches;
-  openDlg = { el, back: document.activeElement, modal: !inPanel };
+  openDlg = { el, back: document.activeElement, modal: !inPanel, dockBefore: $('#dock').dataset.state };
   el.hidden = false;
   if (inPanel) {
     $('#dock').classList.add('detail'); document.body.classList.add('detail-open');
@@ -226,10 +226,11 @@ function openDialog(el, { soft = false } = {}) {
 }
 function closeDialog(restore = true) {
   if (!openDlg) return;
-  const { el, back } = openDlg; openDlg = null;
+  const { el, back, dockBefore } = openDlg; openDlg = null;
   el.hidden = true; $('#scrim').hidden = true;
   $('#dock').classList.remove('detail'); document.body.classList.remove('detail-open');
-  if (!desktop.matches) setDock('peek');
+  // Volvemos al estado en que estaba el panel: si venías de la lista completa, seguís ahí y en la misma posición.
+  if (!desktop.matches) setDock(dockBefore === 'expanded' ? 'expanded' : 'peek');
   if (restore) focusBack(back, el.dataset.id);
 }
 // La lista se vuelve a dibujar al seleccionar o guardar, así que el botón que abrió la ficha puede ya no existir:
@@ -262,7 +263,7 @@ function setDock(s) {
   dock.dataset.state = s; document.body.dataset.dock = s;
   $('#dockGrab').setAttribute('aria-expanded', s === 'expanded');
   $('#dockGrab').setAttribute('aria-label', s === 'expanded' ? 'Achicar la lista' : 'Ver la lista completa');
-  if (s !== 'expanded') $('#dockList').scrollTop = 0;
+  if (s === 'peek') $('#dockList').scrollTop = 0;
 }
 function toggleDock() { if (!desktop.matches) setDock($('#dock').dataset.state === 'expanded' ? 'peek' : 'expanded'); }
 // Los botones del mapa se acomodan arriba del panel achicado.
