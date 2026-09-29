@@ -6,7 +6,7 @@
 // de URL sugerido para sources.json.
 import { parseRobots, isAllowed } from './robots.mjs';
 import { politeClient, discover, Blocked } from './http.mjs';
-import { extract } from './extract.mjs';
+import { extract, tokkoWebMarkers, tokkoWebCards, tokkoWebListings } from './extract.mjs';
 
 // Patrón amplio para encontrar fichas en un sitio que todavía no conocemos.
 const GENERIC = '/(propiedad|propiedades|property|inmueble|inmuebles|ficha|p)/[^/]*\\d|propiedades-(venta|alquiler)-|/\\d{5,}-';
@@ -26,7 +26,16 @@ async function probe(host) {
     const { found, urls } = await discover({ site: origin, match: GENERIC }, get, rules, sitemaps);
     row.sitemap = found;
     row.fichas = urls.length;
-    if (!urls.length) return { ...row, result: found ? 'sitemap sin fichas reconocibles' : 'sin sitemap' };
+    if (!urls.length) {
+      // ¿Plantilla web de Tokko? El listado trae marcadores y tarjetas.
+      if (isAllowed(rules, '/Propiedades')) {
+        const list = await get(`${origin}/Propiedades`);
+        const markers = tokkoWebMarkers(list.text);
+        const listings = tokkoWebListings(tokkoWebCards(list.text, origin), markers, host, new URL(origin).host);
+        if (markers.size) return { ...row, tipo: 'tokko-web', marcadores: markers.size, primeraPagina: listings.length, ejemplo: listings[0] && { op: listings[0].op, price: listings[0].price, address: listings[0].address }, result: listings.length ? 'sirve (tokko-web)' : 'marcadores sin tarjetas' };
+      }
+      return { ...row, result: found ? 'sitemap sin fichas reconocibles' : 'sin sitemap' };
+    }
     // Muestra repartida: principio, medio y final del sitemap.
     const sample = [urls[0], urls[Math.floor(urls.length / 2)], urls.at(-1)].filter((u, i, a) => a.indexOf(u) === i);
     const got = [];

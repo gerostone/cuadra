@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { parseRobots, isAllowed } from './robots.mjs';
 import { politeClient, discover, Blocked } from './http.mjs';
-import { extract } from './extract.mjs';
+import { extract, tokkoWebMarkers, tokkoWebCards, tokkoWebListings } from './extract.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const STALE_DAYS = 7;
@@ -41,12 +41,23 @@ async function crawlSource(src, state, now) {
     const { rules, sitemaps } = robots.status === 200 ? parseRobots(robots.text) : { rules: [], sitemaps: [] };
     if (!isAllowed(rules, '/')) { report.status = 'robots.txt no permite el acceso'; return report; }
 
-    const { found, urls } = await discover(src, get, rules, sitemaps);
-    report.discovered = urls.length;
-    if (!found) { report.status = 'sin sitemap'; return report; }
+    let urls;
+    if (src.type === 'tokko-web') {
+      const tw = await discoverTokkoWeb(src, get, rules);
+      if (tw.error) { report.status = tw.error; return report; }
+      mine[LIST_KEY] = { at: now, via: 'tokko-web', listings: tw.fromList.map(l => ({ ...l, sourceId: src.id })) };
+      report.discovered = tw.total;
+      report.extracted = tw.fromList.length;
+      urls = tw.urls;
+    } else {
+      const d = await discover(src, get, rules, sitemaps);
+      report.discovered = d.urls.length;
+      if (!d.found) { report.status = 'sin sitemap'; return report; }
+      urls = d.urls;
+    }
 
     // Si el aviso ya no está en el sitemap, lo damos de baja.
-    const live = new Set(urls);
+    const live = new Set([...urls, LIST_KEY]);
     for (const u of Object.keys(mine)) if (!live.has(u)) { delete mine[u]; report.removed++; }
 
     const staleBefore = now - STALE_DAYS * 864e5;
@@ -68,6 +79,35 @@ async function crawlSource(src, state, now) {
     report.status = e instanceof Blocked ? `bloqueado (${e.message})` : `error: ${e.message}`;
   }
   return report;
+}
+
+// Sitios con la plantilla web de Tokko (sin sitemap). El listado /Propiedades se
+// pagina con ?o=2,2&p=N. Si una propiedad tiene tarjeta y marcador en el mapa, sale
+// del listado; si no, su ficha /p/ID se lee como cualquier otra (con el mismo caché).
+const MAX_LIST_PAGES = 60;
+const LIST_KEY = '__listado';
+async function discoverTokkoWeb(src, get, rules) {
+  if (!isAllowed(rules, '/Propiedades')) return { error: 'robots.txt no permite el listado' };
+  const first = await get(`${src.site}/Propiedades`);
+  if (first.status !== 200) return { error: `listado respondió ${first.status}` };
+  const origin = new URL(first.url).origin;
+  const markers = tokkoWebMarkers(first.text);
+  const cards = new Map(tokkoWebCards(first.text, origin).map(c => [c.id, c]));
+  const links = new Map();
+  const addLinks = t => { for (const m of t.matchAll(/href="(\/p\/(\d+)[^"]*)"/g)) if (!links.has(m[2])) links.set(m[2], new URL(m[1], origin).href); };
+  addLinks(first.text);
+  for (let p = 2; p <= MAX_LIST_PAGES; p++) {
+    const r = await get(`${origin}/Propiedades?o=2,2&p=${p}`);
+    if (r.status !== 200 || r.text.includes('--NoMoreProperties--')) break;
+    const before = links.size;
+    addLinks(r.text);
+    tokkoWebCards(r.text, origin).forEach(c => cards.set(c.id, c));
+    if (links.size === before) break;
+  }
+  const fromList = tokkoWebListings([...cards.values()].filter(c => markers.has(c.id)), markers, src.name, new URL(origin).host);
+  const listed = new Set(fromList.map(l => l.id.split('_').at(-1)));
+  const urls = [...links].filter(([id]) => !listed.has(id)).map(([, u]) => u).filter(u => isAllowed(rules, new URL(u).pathname));
+  return { origin, fromList, urls, total: links.size };
 }
 
 // Solo lo que la app necesita, para que el archivo pese poco.

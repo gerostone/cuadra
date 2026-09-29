@@ -46,5 +46,35 @@
     "name": "Larocca Propiedades",
     "site": "https://www.laroccapropiedades.com",
     "match": "/busqueda/ver/"
+  },
+  {
+    "id": "varela",
+    "name": "Varela Inmobiliaria",
+    "site": "https://www.varelainmobiliaria.com.ar",
+    "type": "tokko-web"
+  },
+  {
+    "id": "shenk",
+    "name": "Shenk Inmobiliaria",
+    "site": "https://www.shenk.com.ar",
+    "type": "tokko-web"
+  },
+  {
+    "id": "gaed",
+    "name": "Gaed Inmobiliaria",
+    "site": "https://www.gaed.com.ar",
+    "type": "tokko-web"
+  },
+  {
+    "id": "lipovich",
+    "name": "Lipovich",
+    "site": "https://www.lipovich.com.ar",
+    "type": "tokko-web"
+  },
+  {
+    "id": "imar",
+    "name": "Inmobiliaria Imar",
+    "site": "https://www.inmobiliariaimar.com.ar",
+    "type": "tokko-web"
   }
 ]
