@@ -8,10 +8,11 @@ const BLOCK = new Set([401, 403, 429, 503]);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 export class Blocked extends Error {}
-export function politeClient() {
+// Un cliente = un ritmo. Sitios alojados en la misma infraestructura comparten cliente.
+export function politeClient(delay = DELAY) {
   let last = 0;
   return async function get(url) {
-    const wait = last + DELAY - Date.now();
+    const wait = last + delay - Date.now();
     if (wait > 0) await sleep(wait);
     last = Date.now();
     let res;

@@ -32,8 +32,7 @@ const REFRESH = args.includes('--refresh'); // vuelve a leer todas las fichas, a
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const readJson = async (p, d) => { try { return JSON.parse(await readFile(p, 'utf8')); } catch { return d; } };
 
-async function crawlSource(src, state, now) {
-  const get = politeClient();
+async function crawlSource(src, state, now, get = politeClient()) {
   const report = { id: src.id, name: src.name, discovered: 0, fetched: 0, extracted: 0, removed: 0, status: 'ok' };
   const mine = state[src.id] ??= {};
   try {
@@ -126,8 +125,13 @@ async function main() {
   const sources = (await readJson(join(ROOT, 'crawler/sources.json'), [])).filter(s => !ONLY?.length || ONLY.includes(s.id));
   const state = await readJson(STATE, {});
   const now = Date.now();
-  // Un sitio por vez no hace falta: cada sitio tiene su propio ritmo, así que corren en paralelo.
-  const reports = await Promise.all(sources.map(s => crawlSource(s, state, now)));
+  // Cada sitio tiene su propio ritmo, así que corren en paralelo. Los sitios con la
+  // plantilla web de Tokko están alojados en los mismos servidores: van de a uno,
+  // con un solo cliente más lento, para no sumar pedidos contra la misma infraestructura.
+  const tokko = sources.filter(s => s.type === 'tokko-web');
+  const shared = politeClient(3000);
+  const tokkoRun = (async () => { const out = []; for (const s of tokko) out.push(await crawlSource(s, state, now, shared)); return out; })();
+  const reports = [...(await Promise.all(sources.filter(s => s.type !== 'tokko-web').map(s => crawlSource(s, state, now)))), ...(await tokkoRun)];
 
   const byId = new Map();
   for (const pages of Object.values(state)) for (const p of Object.values(pages)) for (const l of p.listings ?? []) byId.set(l.id, slim(l));
