@@ -215,3 +215,48 @@ body[data-dock="expanded"] .fabs, body[data-dock="hidden"] .fabs { display: none
 .toggle[aria-pressed="true"] i { background: var(--fg); }
 .toggle[aria-pressed="true"] i::after { transform: translateX(18px); }
 .fsheet-foot { display: flex; gap: 10px; margin-top: 20px; }
+
+/* ---------- Escritorio: el panel pasa a la izquierda con filtros y lista; la ficha se abre adentro ---------- */
+@media (min-width: 900px) {
+  .top { right: auto; width: 380px; padding: 16px 16px 0; z-index: 13; }
+  .dock {
+    top: 0; bottom: 0; left: 0; right: auto; width: 380px; max-width: none; margin: 0; border-radius: 0;
+    padding: 76px 16px 16px; box-shadow: 4px 0 24px rgba(0,0,0,.2); transform: none !important; pointer-events: auto !important;
+  }
+  .dock-grab, .dock-filters { display: none; }
+  .dock-head { order: 1; cursor: default; }
+  .dock .seg { order: 2; margin-bottom: 14px; }
+  .dock .fsheet { order: 3; }
+  .dock-list { order: 4; flex: 1; min-height: 0; overflow-y: auto !important; max-height: none !important; }
+  .dock .card { display: flex !important; }
+  .dock .fsheet {
+    position: static; display: block; max-width: none; max-height: none; margin: 0; padding: 0 0 12px; overflow: visible;
+    background: none; color: #fff; border-radius: 0; box-shadow: none; animation: none;
+  }
+  .dock .fsheet-head, .dock #filtersApply { display: none; }
+  .dock .fgroup { margin: 0 0 12px; }
+  .dock .fgroup legend { color: rgba(255,255,255,.6); }
+  .dock .seg.light button { background: var(--ink-2); border-color: transparent; color: #fff; }
+  .dock .seg.light button[aria-pressed="true"] { background: #fff; color: var(--ink); }
+  .dock .toggle { min-height: 44px; color: #fff; border-color: rgba(255,255,255,.12); font-size: 14px; }
+  .dock .toggle i { background: #3a4447; }
+  .dock .toggle[aria-pressed="true"] i { background: #fff; }
+  .dock .toggle[aria-pressed="true"] i::after { background: var(--ink); }
+  .dock .fsheet-foot { margin-top: 8px; }
+  .dock #filtersClear { flex: none; min-height: 44px; border-color: rgba(255,255,255,.4); color: #fff; }
+  .dock.detail { padding: 0; }
+  .dock.detail > :not(.sheet) { display: none !important; }
+  .detail-open .top { display: none; }
+  .dock .sheet { position: static; order: 5; flex: 1; min-height: 0; max-width: none; margin: 0; border-radius: 0; box-shadow: none; animation: none; transform: none !important; }
+  .dock .hero { touch-action: auto; }
+  .dock .hero .grab, .dock .hero .close { display: none; }
+  .dock .back {
+    display: flex; align-items: center; position: absolute; top: 12px; left: 12px; min-height: 44px; padding: 0 14px;
+    border: 0; border-radius: 12px; background: rgba(0,0,0,.6); color: #fff; font-weight: 700;
+  }
+  .fabs { right: 16px; bottom: 24px; }
+  body[data-dock] .fabs { display: flex; }
+  .leaflet-bottom.leaflet-right { bottom: 0; }
+  #alertWrap { left: calc(380px + (100vw - 380px) / 2); right: auto; width: min(420px, calc(100vw - 420px)); transform: translateX(-50%); }
+  .scrim { display: none; }
+}

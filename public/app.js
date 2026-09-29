@@ -19,7 +19,7 @@ async function loadListings() {
   } catch {
     remote.mode = 'demo';
   }
-  lastIds = ''; render();
+  lastIds = null; render();
 }
 function listingsAround(pos, radius) {
   if (remote.mode === 'pending') return [];
@@ -107,7 +107,7 @@ function step() {
 }
 
 // ---------- Render ----------
-let lastIds = '';
+let lastIds = null; // null obliga a redibujar la lista (una lista vacía también es '')
 const byId = new Map();
 function render() {
   if (!state.pos) return;
@@ -193,13 +193,33 @@ function select(id) {
 }
 
 // ---------- Diálogos (hoja de filtros y ficha) ----------
+const desktop = matchMedia('(min-width: 900px)');
+// En escritorio la hoja de filtros queda fija dentro del panel y la ficha se abre en el panel; en el teléfono son hojas sobre el mapa.
+function placeLayout() {
+  closeDialog(false);
+  const fs = $('#filtersSheet'), sh = $('#sheet');
+  if (desktop.matches) {
+    $('#dockList').before(fs); $('#dock').append(sh);
+    fs.hidden = false; fs.setAttribute('role', 'group'); fs.removeAttribute('aria-modal');
+  } else {
+    document.body.append(fs, sh);
+    fs.hidden = true; fs.setAttribute('role', 'dialog'); fs.setAttribute('aria-modal', 'true');
+  }
+  setDock(desktop.matches ? 'expanded' : 'peek');
+}
 let openDlg = null;
 function openDialog(el, { soft = false } = {}) {
   closeDialog(false);
-  openDlg = { el, back: document.activeElement, modal: true };
+  const inPanel = desktop.matches;
+  openDlg = { el, back: document.activeElement, modal: !inPanel };
   el.hidden = false;
-  $('#scrim').hidden = false; $('#scrim').classList.toggle('soft', soft);
-  setDock('hidden');
+  if (inPanel) {
+    $('#dock').classList.add('detail'); document.body.classList.add('detail-open');
+    el.querySelector('.sheet-scroll')?.scrollTo(0, 0);
+  } else {
+    $('#scrim').hidden = false; $('#scrim').classList.toggle('soft', soft);
+    setDock('hidden');
+  }
   const first = [...el.querySelectorAll('[data-autofocus]')].find(x => x.offsetParent !== null) || el.querySelector('button, a[href]');
   first?.focus();
 }
@@ -207,7 +227,8 @@ function closeDialog(restore = true) {
   if (!openDlg) return;
   const { el, back } = openDlg; openDlg = null;
   el.hidden = true; $('#scrim').hidden = true;
-  setDock('peek');
+  $('#dock').classList.remove('detail'); document.body.classList.remove('detail-open');
+  if (!desktop.matches) setDock('peek');
   if (restore) focusBack(back, el.dataset.id);
 }
 // La lista se vuelve a dibujar al seleccionar o guardar, así que el botón que abrió la ficha puede ya no existir:
@@ -242,7 +263,7 @@ function setDock(s) {
   $('#dockGrab').setAttribute('aria-label', s === 'expanded' ? 'Achicar la lista' : 'Ver la lista completa');
   if (s !== 'expanded') $('#dockList').scrollTop = 0;
 }
-function toggleDock() { setDock($('#dock').dataset.state === 'expanded' ? 'peek' : 'expanded'); }
+function toggleDock() { if (!desktop.matches) setDock($('#dock').dataset.state === 'expanded' ? 'peek' : 'expanded'); }
 // Los botones del mapa se acomodan arriba del panel achicado.
 function syncDockHeight() {
   const dock = $('#dock');
@@ -277,7 +298,8 @@ dockGesture($('#dockGrab'));
 dockGesture($('.dock-head'));
 $('#dockGrab').addEventListener('click', () => { if (!dockDragged) toggleDock(); });
 $('.dock-head').addEventListener('click', e => { if (!dockDragged && !e.target.closest('button')) toggleDock(); });
-setDock('peek');
+desktop.addEventListener('change', placeLayout);
+placeLayout();
 
 // ---------- Ficha ----------
 function openSheet(p) {
@@ -344,11 +366,11 @@ function sheetGesture(sh) {
   const end = () => { if (y0 == null) return; y0 = null; sh.classList.remove('dragging'); sh.style.transform = ''; if (dy > 80) closeDialog(); };
   hero.addEventListener('pointerup', end); hero.addEventListener('pointercancel', end);
 }
-// Centra el pin en la franja de mapa que queda visible arriba de la ficha.
+// Centra el pin en la parte del mapa que se ve: arriba de la ficha en el teléfono, a la derecha del panel en escritorio.
 function focusPin(p) {
   state.follow = false;
-  const target = map.project([p.lat, p.lng]).add([0, map.getSize().y / 2 - 75]);
-  map.panTo(map.unproject(target), { animate: true });
+  const shift = desktop.matches ? [-190, 0] : [0, map.getSize().y / 2 - 75];
+  map.panTo(map.unproject(map.project([p.lat, p.lng]).add(shift)), { animate: true });
 }
 
 // Si una foto no carga, mostramos la fachada ilustrada.
@@ -403,7 +425,7 @@ document.addEventListener('click', e => {
   if (b.dataset.op) state.op = b.dataset.op;
   else if (b.dataset.amb) state.amb = Number(b.dataset.amb);
   else state[b.dataset.flag] = !state[b.dataset.flag];
-  syncFilterControls(); lastIds = ''; render();
+  syncFilterControls(); lastIds = null; render();
 });
 function syncFilterControls() {
   document.querySelectorAll('[data-op]').forEach(b => b.setAttribute('aria-pressed', b.dataset.op === state.op));
@@ -414,7 +436,7 @@ function syncFilterControls() {
 }
 function clearFilters(all) {
   Object.assign(state, { amb: 0, fav: false, pets: false, cred: false }, all ? { op: 'todo' } : {});
-  syncFilterControls(); lastIds = ''; render();
+  syncFilterControls(); lastIds = null; render();
 }
 $('#emptyClear').onclick = () => clearFilters(true);
 $('#walkBtn').onclick = toggleWalk;
