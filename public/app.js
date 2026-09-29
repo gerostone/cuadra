@@ -198,11 +198,12 @@ const desktop = matchMedia('(min-width: 900px)');
 function placeLayout() {
   closeDialog(false);
   const fs = $('#filtersSheet'), sh = $('#sheet');
+  // Venta/alquiler va arriba de la lista en escritorio y abajo en el teléfono: lo movemos para que el orden de Tab siga al visual.
   if (desktop.matches) {
-    $('#dockList').before(fs); $('#dock').append(sh);
+    $('#dockList').before($('#opSeg'), fs); $('#dock').append(sh);
     fs.hidden = false; fs.setAttribute('role', 'group'); fs.removeAttribute('aria-modal');
   } else {
-    document.body.append(fs, sh);
+    $('#dockList').after($('#opSeg')); document.body.append(fs, sh);
     fs.hidden = true; fs.setAttribute('role', 'dialog'); fs.setAttribute('aria-modal', 'true');
   }
   setDock(desktop.matches ? 'expanded' : 'peek');

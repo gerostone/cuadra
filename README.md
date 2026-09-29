@@ -2,7 +2,7 @@
 
 Web app para recorrer un barrio caminando y ver en el mapa las propiedades en venta y alquiler que tenés cerca. Te avisa cuando pasás a menos de 45 m de una.
 
-- **Frontend:** `public/index.html` (Leaflet + OpenStreetMap, sin build).
+- **Frontend:** `public/` sin build: `index.html` (estructura), `app.css` (estilos), `app.js` (mapa, panel, fichas, ubicación), `ui.js` (formatos y filtros, con pruebas en `test/ui.test.mjs`) y `demo.js` (avisos de ejemplo y fachadas ilustradas). Leaflet + OpenStreetMap.
 - **Avisos:** `crawler/` recorre los sitios web de las inmobiliarias de `crawler/sources.json` y genera `public/data/listings.json`, que la app lee directo. Si el archivo está vacío, la app muestra avisos de ejemplo.
 - **Actualización:** el workflow `.github/workflows/crawl.yml` corre todos los días y commitea los cambios; Netlify publica solo.
 

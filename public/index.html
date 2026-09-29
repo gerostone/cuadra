@@ -10,20 +10,9 @@
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<div id="map" role="application" aria-label="Mapa de propiedades"></div>
-
 <header class="top">
   <div class="pill"><i class="mark" aria-hidden="true"></i><b>Cuadra</b><span class="live" id="liveDot" hidden></span><span id="status">Buscando tu ubicación…</span></div>
 </header>
-
-<div class="fabs">
-  <button class="fab" id="walkBtn" aria-pressed="false" title="Simular caminata" aria-label="Simular caminata">
-    <svg viewBox="0 0 24 24"><circle cx="13" cy="4" r="2"/><path d="M9 21l2-6 3 3v3M7 12l3-4 4 1 2 4M10 8l1 7"/></svg>
-  </button>
-  <button class="fab" id="locBtn" title="Centrar en mí" aria-label="Centrar en mi ubicación">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg>
-  </button>
-</div>
 
 <section class="dock" id="dock" data-state="peek" aria-label="Propiedades cerca tuyo">
   <button class="dock-grab" id="dockGrab" type="button" aria-expanded="false" aria-controls="dockList" aria-label="Ver la lista completa"><span></span></button>
@@ -43,6 +32,16 @@
     <button type="button" data-op="alquiler" aria-pressed="false">Alquiler</button>
   </div>
 </section>
+
+<div class="fabs">
+  <button class="fab" id="walkBtn" aria-pressed="false" title="Simular caminata" aria-label="Simular caminata">
+    <svg viewBox="0 0 24 24"><circle cx="13" cy="4" r="2"/><path d="M9 21l2-6 3 3v3M7 12l3-4 4 1 2 4M10 8l1 7"/></svg>
+  </button>
+  <button class="fab" id="locBtn" title="Centrar en mí" aria-label="Centrar en mi ubicación">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg>
+  </button>
+</div>
+
 <div class="scrim" id="scrim" hidden></div>
 <section class="fsheet" id="filtersSheet" role="dialog" aria-modal="true" aria-labelledby="filtersTitle" hidden>
   <header class="fsheet-head"><h2 id="filtersTitle">Filtros</h2><button type="button" class="icon-btn" data-close data-autofocus aria-label="Cerrar filtros">×</button></header>
@@ -65,6 +64,9 @@
 
 <div id="alertWrap" aria-live="polite"></div>
 <article class="sheet" id="sheet" role="dialog" aria-modal="true" hidden></article>
+
+<!-- El mapa va al final para que con Tab se llegue primero al panel y no a cada marcador. -->
+<div id="map" role="application" aria-label="Mapa de propiedades"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module" src="app.js"></script>

@@ -71,6 +71,9 @@ body[data-dock="expanded"] .fabs, body[data-dock="hidden"] .fabs { display: none
 }
 .dock.dragging { transition: none; }
 .dock[data-state="hidden"] { transform: translateY(calc(100% + 24px)); pointer-events: none; }
+/* El azul no se ve sobre el panel oscuro: ahí el foco es blanco. */
+.dock :focus-visible { outline-color: #fff; }
+.dock .sheet :focus-visible { outline-color: var(--venta-text); }
 .dock-grab { align-self: center; width: 64px; height: 24px; border: 0; background: none; display: grid; place-items: center; touch-action: none; }
 .dock-grab span { width: 36px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.35); }
 .dock-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; touch-action: none; cursor: pointer; }
@@ -260,3 +263,9 @@ body[data-dock="expanded"] .fabs, body[data-dock="hidden"] .fabs { display: none
   #alertWrap { left: calc(380px + (100vw - 380px) / 2); right: auto; width: min(420px, calc(100vw - 420px)); transform: translateX(-50%); }
   .scrim { display: none; }
 }
+
+/* ---------- Tema oscuro: el panel también es oscuro, así que lo separamos del mapa con un borde ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .dock, :root:not([data-theme="light"]) .alert.info { box-shadow: 0 0 0 1px rgba(255,255,255,.1), 0 10px 30px rgba(0,0,0,.5); }
+}
+:root[data-theme="dark"] .dock, :root[data-theme="dark"] .alert.info { box-shadow: 0 0 0 1px rgba(255,255,255,.1), 0 10px 30px rgba(0,0,0,.5); }
